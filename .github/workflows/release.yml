@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Build binaries
+        run: |
+          platforms="darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64"
+          for platform in $platforms; do
+            os="${platform%/*}"
+            arch="${platform#*/}"
+            output="butler-${os}-${arch}"
+            if [ "$os" = "windows" ]; then
+              output="${output}.exe"
+            fi
+            GOOS="$os" GOARCH="$arch" go build -ldflags "-s -w" -o "dist/${output}" .
+          done
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
