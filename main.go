@@ -19,6 +19,12 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Handle uninstall before opening the DB — we can't delete a locked DB file.
+	if os.Args[1] == "uninstall" {
+		runUninstall(os.Args[2:])
+		return
+	}
+
 	// Enable colored output for CLI (not MCP serve mode).
 	if os.Args[1] != "serve" {
 		cliColor = true
@@ -595,14 +601,14 @@ func main() {
 			fmt.Fprintf(os.Stderr, "%s\n", colorError("Error: "+err.Error()))
 			os.Exit(1)
 		}
-	case "help":
+	case "--help", "-h", "help":
 		if len(os.Args) >= 3 {
 			printCommandHelp(os.Args[2])
 		} else {
 			printHelp()
 		}
 	default:
-		fmt.Printf("Unknown command: %s\nRun 'butler help' for a list of commands.\n", os.Args[1])
+		fmt.Printf("Unknown command: %s\nRun 'butler --help' for a list of commands.\n", os.Args[1])
 		os.Exit(1)
 	}
 }

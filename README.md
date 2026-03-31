@@ -2,6 +2,52 @@
 
 A personal task manager that AI agents use via MCP to remember what you're working on, what to do next, and what rules to follow.
 
+## Install
+
+### macOS / Linux
+
+Install:
+```
+curl -fsSL https://raw.githubusercontent.com/cytivibe/butler/main/install.sh | sh
+```
+
+Add to Claude Code:
+```
+claude mcp add butler --scope user -- butler serve
+```
+
+Uninstall:
+```
+sudo butler uninstall
+claude mcp remove butler
+```
+
+### Windows
+
+Install (PowerShell):
+```
+irm https://raw.githubusercontent.com/cytivibe/butler/main/install.ps1 | iex
+```
+
+Add to Claude Code (PowerShell):
+```
+claude mcp add butler --scope user -- cmd /c "%LOCALAPPDATA%\butler\butler.exe" serve
+```
+
+Uninstall:
+```
+butler uninstall
+claude mcp remove butler
+```
+
+### Manual download
+
+Download the binary for your platform from [GitHub Releases](https://github.com/cytivibe/butler/releases), make it executable, and move it to a directory in your PATH.
+
+### Start using Butler
+
+Start a new Claude Code session and say **"summon butler"** to activate the workflow.
+
 ## Commands
 
 ### Tasks
@@ -120,8 +166,11 @@ A personal task manager that AI agents use via MCP to remember what you're worki
 
 ### Other
 
-- `butler help` — list all commands; `butler help <command>` for detailed usage, flags, and examples
+- `butler --help` — list all commands; `butler --help <command>` for detailed usage, flags, and examples
 - `butler serve` — starts the MCP server over stdio
+- `butler uninstall` — remove butler binary and `~/.butler/` data directory
+  - Flags: `--force` (skip confirmation prompt)
+  - May require `sudo` if installed to `/usr/local/bin`
 
 ## Task Statuses
 
@@ -164,18 +213,7 @@ Any state → `archived` → `active`
 
 ## MCP Server
 
-All commands are available as MCP tools. Configure in Claude Code:
-
-```json
-{
-  "mcpServers": {
-    "butler": {
-      "command": "/path/to/butler",
-      "args": ["serve"]
-    }
-  }
-}
-```
+All commands are available as MCP tools. See [MCP setup](#mcp-setup-claude-code) for configuration.
 
 Tools: `addtask`, `settask`, `gettask`, `deletetask`, `addrule`, `setrule`, `getrule`, `deleterule`, `addtag`, `settag`, `gettag`, `deletetag`
 
@@ -197,33 +235,4 @@ Data         ─  store.go (SQLite, transactions, locking)
 - SQLite database at `~/.butler/butler.db`
 - Tables: `tasks`, `task_blockers`, `task_tags`, `rules`, `rule_tags`, `tags`, `config`
 - WAL mode, busy timeout, foreign keys enabled
-
-## Install
-
-### Quick install (macOS / Linux)
-
-```
-curl -fsSL https://raw.githubusercontent.com/cytivibe/butler/main/install.sh | sh
-```
-
-### Manual download
-
-Download the binary for your platform from [GitHub Releases](https://github.com/cytivibe/butler/releases), make it executable, and move it to a directory in your PATH.
-
-### MCP setup (Claude Code)
-
-Add to `~/.claude/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "butler": {
-      "command": "butler",
-      "args": ["serve"]
-    }
-  }
-}
-```
-
-Then start a new session and say **"summon butler"** to activate the workflow.
 

@@ -23,16 +23,15 @@ jobs:
 
       - name: Build binaries
         run: |
-          platforms="darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64"
-          for platform in $platforms; do
-            os="${platform%/*}"
-            arch="${platform#*/}"
-            output="butler-${os}-${arch}"
-            if [ "$os" = "windows" ]; then
-              output="${output}.exe"
-            fi
-            GOOS="$os" GOARCH="$arch" go build -ldflags "-s -w" -o "dist/${output}" .
-          done
+          build() {
+            GOOS="$1" GOARCH="$2" go build -ldflags "-s -w" -o "dist/$3" .
+          }
+          build darwin  arm64 butler-macos-apple-silicon
+          build darwin  amd64 butler-macos-intel
+          build linux   amd64 butler-linux-x64
+          build linux   arm64 butler-linux-arm64
+          build windows amd64 butler-windows-x64.exe
+          build windows arm64 butler-windows-arm64.exe
 
       - name: Create release
         uses: softprops/action-gh-release@v2

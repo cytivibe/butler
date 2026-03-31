@@ -7,19 +7,23 @@ set -e
 REPO="cytivibe/butler"
 INSTALL_DIR="/usr/local/bin"
 
-# Detect OS
+# Detect platform name
 case "$(uname -s)" in
-    Darwin)  OS="darwin" ;;
-    Linux)   OS="linux" ;;
-    MINGW*|MSYS*|CYGWIN*) OS="windows" ;;
-    *) echo "Unsupported OS: $(uname -s)" >&2; exit 1 ;;
-esac
-
-# Detect architecture
-case "$(uname -m)" in
-    x86_64|amd64)  ARCH="amd64" ;;
-    arm64|aarch64) ARCH="arm64" ;;
-    *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+    Darwin)
+        case "$(uname -m)" in
+            arm64|aarch64) BINARY="butler-macos-apple-silicon" ;;
+            x86_64|amd64)  BINARY="butler-macos-intel" ;;
+            *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+        esac
+        ;;
+    Linux)
+        case "$(uname -m)" in
+            x86_64|amd64)  BINARY="butler-linux-x64" ;;
+            arm64|aarch64) BINARY="butler-linux-arm64" ;;
+            *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+        esac
+        ;;
+    *) echo "Unsupported OS: $(uname -s). For Windows, use install.ps1." >&2; exit 1 ;;
 esac
 
 # Get latest release tag
@@ -29,15 +33,10 @@ if [ -z "$LATEST" ]; then
     exit 1
 fi
 
-BINARY="butler-${OS}-${ARCH}"
-if [ "$OS" = "windows" ]; then
-    BINARY="${BINARY}.exe"
-fi
-
 URL="https://github.com/${REPO}/releases/download/${LATEST}/${BINARY}"
 
-echo "Downloading butler ${LATEST} for ${OS}/${ARCH}..."
-curl -fsSL -o butler "$URL"
+echo "Downloading butler ${LATEST} (${BINARY})..."
+curl -fL --progress-bar -o butler "$URL"
 chmod +x butler
 
 # Install

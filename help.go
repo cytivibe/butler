@@ -32,15 +32,16 @@ Data
 
 Other
   serve        Start MCP server over stdio
-  help         Show this help (use 'butler help <command>' for details)
+  uninstall    Remove butler binary and data from this machine
+  --help       Show this help (use 'butler --help <command>' for details)
 
-Run 'butler help <command>' for detailed usage of any command.`)
+Run 'butler --help <command>' for detailed usage of any command.`)
 }
 
 func printCommandHelp(cmd string) {
 	help, ok := commandHelp[cmd]
 	if !ok {
-		fmt.Printf("Unknown command: %s\nRun 'butler help' for a list of commands.\n", cmd)
+		fmt.Printf("Unknown command: %s\nRun 'butler --help' for a list of commands.\n", cmd)
 		os.Exit(1)
 	}
 	fmt.Println(help)
@@ -359,13 +360,37 @@ Why use serve:
   tools over stdin/stdout. Used for integration with AI assistants and other MCP
   clients. All CLI commands have equivalent MCP tools.`,
 
-	"help": `help — Show help for butler commands
+	"uninstall": `uninstall — Remove butler binary and data from this machine
 
 Usage:
-  butler help              List all commands
-  butler help <command>    Detailed help for a specific command
+  butler uninstall [--force]
+
+Flags:
+  --force    Skip the confirmation prompt
+
+This will:
+  1. Stop all running butler serve processes
+  2. Delete ~/.butler/ directory (database and all data)
+  3. Delete the butler binary
+  4. Clean up PATH (Windows only)
 
 Examples:
-  butler help addtask
-  butler help settask`,
+  sudo butler uninstall       Uninstall on macOS/Linux
+  butler uninstall            Uninstall on Windows
+  butler uninstall --force    Skip confirmation prompt
+
+Note:
+  macOS/Linux: requires sudo if installed to /usr/local/bin.
+  Windows: run as Administrator if needed.
+  Remember to remove the MCP server config: claude mcp remove butler`,
+
+	"help": `--help — Show help for butler commands
+
+Usage:
+  butler --help              List all commands
+  butler --help <command>    Detailed help for a specific command
+
+Examples:
+  butler --help addtask
+  butler --help settask`,
 }

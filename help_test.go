@@ -15,7 +15,7 @@ func TestPrintCommandHelpKnown(t *testing.T) {
 }
 
 func TestCommandHelpCoversServeAndHelp(t *testing.T) {
-	for _, cmd := range []string{"serve", "help"} {
+	for _, cmd := range []string{"serve", "help", "uninstall"} {
 		if _, ok := commandHelp[cmd]; !ok {
 			t.Errorf("command '%s' has no help entry", cmd)
 		}
