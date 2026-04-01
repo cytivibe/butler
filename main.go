@@ -57,6 +57,9 @@ func main() {
 				parallel = true
 			case "--force":
 				force = true
+			case "--desc", "--verify", "--deadline", "--recur":
+				fmt.Fprintf(os.Stderr, "%s\n", colorError(fmt.Sprintf("Error: %s is a settask flag — create the task first, then use settask to set it", args[i])))
+				os.Exit(1)
 			case "--under":
 				i++
 				if i >= len(args) {
@@ -83,7 +86,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "%s\n", colorError("Error: "+err.Error()))
 			os.Exit(1)
 		}
-		fmt.Println(colorSuccess(fmt.Sprintf("Task added: %s", name)))
+		msg := fmt.Sprintf("Task added: %s", name)
+		for _, t := range tags {
+			msg += " #" + t
+		}
+		fmt.Println(colorSuccess(msg))
 	case "settask":
 		if len(os.Args) < 4 {
 			fmt.Println("Usage: butler settask \"task:pos\" [\"new name\"] [--status ...] [--desc ...] [--verify ...] [--deadline ...] [--tag ...] [--force]")
@@ -171,7 +178,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "%s\n", colorError("Error: "+err.Error()))
 			os.Exit(1)
 		}
-		fmt.Println(colorSuccess(fmt.Sprintf("Task updated: %s", taskRef)))
+		displayName := taskRef
+		if opts.Name != nil {
+			displayName = *opts.Name
+		}
+		fmt.Println(colorSuccess(fmt.Sprintf("Task updated: %s", displayName)))
 	case "gettask":
 		args := os.Args[2:]
 		all := false
@@ -219,7 +230,7 @@ func main() {
 				opts.TaskRef = args[i]
 			}
 		}
-		if !all && opts.TaskRef == "" {
+		if !all && opts.TaskRef == "" && opts.Tag == "" && opts.Status == "" {
 			fmt.Println("Usage: butler gettask --all [--status STATUS] [--tag TAG] [--depth N] [--sort recent] [--details]")
 			fmt.Println("       butler gettask \"task:pos\" [--status STATUS] [--tag TAG] [--depth N] [--details]")
 			os.Exit(1)
@@ -314,7 +325,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "%s\n", colorError("Error: "+err.Error()))
 			os.Exit(1)
 		}
-		fmt.Println(colorSuccess(fmt.Sprintf("Rule %d added: %s", seq, name)))
+		msg := fmt.Sprintf("Rule %d added: %s", seq, name)
+		for _, t := range tags {
+			msg += " #" + t
+		}
+		fmt.Println(colorSuccess(msg))
 	case "getrule":
 		args := os.Args[2:]
 		var opts GetRuleOpts
@@ -525,7 +540,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "%s\n", colorError("Error: "+err.Error()))
 			os.Exit(1)
 		}
-		fmt.Println(colorSuccess(fmt.Sprintf("Rule %d updated", seq)))
+		if opts.Name != nil {
+			fmt.Println(colorSuccess(fmt.Sprintf("Rule %d updated: %s", seq, *opts.Name)))
+		} else {
+			fmt.Println(colorSuccess(fmt.Sprintf("Rule %d updated", seq)))
+		}
 	case "export":
 		args := os.Args[2:]
 		var filePath string

@@ -190,7 +190,7 @@ func GetTasks(store *Store, opts GetTaskOpts) ([]string, error) {
 				return collectSubTasksFiltered(subTaskContext{
 					tx: tx, prefix: posPrefix, indent: "  ", namedTaskName: rootName,
 					parentStatus: status, parentStatusTime: statusChangedAt, parentDeadline: deadline,
-					now: now, opts: opts, currentDepth: 1,
+					now: now, opts: opts, currentDepth: 1, parentMatchedTag: tagMatch,
 				}, taskID, &lines)
 			}
 			return nil
@@ -269,7 +269,7 @@ func GetTasks(store *Store, opts GetTaskOpts) ([]string, error) {
 				if err := collectSubTasksFiltered(subTaskContext{
 					tx: tx, prefix: "", indent: "  ", namedTaskName: t.name,
 					parentStatus: t.status, parentStatusTime: t.statusChangedAt, parentDeadline: t.deadline,
-					now: now, opts: opts, currentDepth: 1,
+					now: now, opts: opts, currentDepth: 1, parentMatchedTag: tagMatch,
 				}, t.id, &lines); err != nil {
 					return err
 				}
@@ -326,6 +326,7 @@ type subTaskContext struct {
 	now              time.Time
 	opts             GetTaskOpts
 	currentDepth     int
+	parentMatchedTag bool
 }
 
 func collectSubTasksFiltered(ctx subTaskContext, parentID int, lines *[]string) error {
@@ -407,7 +408,7 @@ func collectSubTasksFiltered(ctx subTaskContext, parentID int, lines *[]string) 
 	for i, v := range visible {
 		isLast := i == len(visible)-1
 		statusMatch := ctx.opts.Status == "" || v.displayStatus == ctx.opts.Status
-		tagMatch := ctx.opts.Tag == "" || taskHasTag(tx, v.id, ctx.opts.Tag)
+		tagMatch := ctx.opts.Tag == "" || ctx.parentMatchedTag || taskHasTag(tx, v.id, ctx.opts.Tag)
 
 		// Tree connector for this item
 		var linePrefix, detailPrefix string
@@ -458,6 +459,7 @@ func collectSubTasksFiltered(ctx subTaskContext, parentID int, lines *[]string) 
 			childCtx.parentStatusTime = v.displayTime
 			childCtx.parentDeadline = v.displayDeadline
 			childCtx.currentDepth = ctx.currentDepth + 1
+			childCtx.parentMatchedTag = tagMatch
 			if err := collectSubTasksFiltered(childCtx, v.id, lines); err != nil {
 				return err
 			}

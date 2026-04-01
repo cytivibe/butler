@@ -2,6 +2,8 @@
 
 A personal task manager that AI agents use via MCP to remember what you're working on, what to do next, and what rules to follow.
 
+**100% local. 100% private.** Everything lives in a single file on your machine — `~/.butler/butler.db`. No accounts, no cloud, no telemetry.
+
 ## Install
 
 ### macOS / Linux
@@ -93,7 +95,7 @@ Start a new Claude Code session and say **"summon butler"** to activate the work
   - Removes deleted task from all blocker lists; waiting tasks with no blockers left auto-transition to active
   - `butler deletetask "task"` — delete with confirmation
   - `butler deletetask "task:1.a" --force` — delete without confirmation
-- `gettask` — view tasks (requires `--all` or a task ref)
+- `gettask` — view tasks (requires `--all`, a task ref, `--tag`, or `--status`)
   - Flags: `--all`, `--status "STATUS"`, `--tag "TAG"`, `--depth N`, `--sort recent`, `--details`
   - `--depth` values: `0` = task itself only, `1` = direct children, `2` = grandchildren, etc. Default unlimited.
   - `--status` values: `not_started`, `active`, `waiting`, `deferred`, `completed`, `reopened`, `cancelled`, `archived`
@@ -102,10 +104,10 @@ Start a new Claude Code session and say **"summon butler"** to activate the work
   - `butler gettask --all` — all tasks with hierarchy, statuses, and blockers
   - `butler gettask "task:pos"` — specific task and its children (with inherited tags)
   - `butler gettask --all --depth 0` — all named tasks only, no children
-  - `butler gettask --all --status active` — all active tasks and their children
-  - `butler gettask --all --status active --depth 1` — active tasks + direct children only
-  - `butler gettask --all --tag URGENT` — all tasks tagged URGENT
-  - `butler gettask --all --tag NONE` — all tasks with no tags
+  - `butler gettask --status active` — all active tasks and their children
+  - `butler gettask --status active --depth 1` — active tasks + direct children only
+  - `butler gettask --tag URGENT` — all tasks tagged URGENT
+  - `butler gettask --tag NONE` — all tasks with no tags
   - `butler gettask "task:1" --status waiting` — waiting children of task:1
   - `butler gettask --all --sort recent` — most recently changed first
   - `butler gettask --all --sort deadline` — soonest deadline first, no-deadline last

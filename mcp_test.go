@@ -221,7 +221,7 @@ func TestMCPSetTag(t *testing.T) {
 		t.Fatal(resp.Error.Message)
 	}
 
-	resp = mcpCall(mcp, "gettag", map[string]interface{}{})
+	resp = mcpCall(mcp, "gettag", map[string]interface{}{"all": true})
 	if !strings.Contains(mcpText(resp), "NEW") {
 		t.Fatalf("expected renamed tag: %s", mcpText(resp))
 	}
@@ -238,7 +238,7 @@ func TestMCPDeleteTag(t *testing.T) {
 		t.Fatal(resp.Error.Message)
 	}
 
-	resp = mcpCall(mcp, "gettag", map[string]interface{}{})
+	resp = mcpCall(mcp, "gettag", map[string]interface{}{"all": true})
 	if mcpText(resp) != "No tags found." {
 		t.Fatalf("expected no tags: %s", mcpText(resp))
 	}
@@ -553,5 +553,172 @@ func TestMCPServe(t *testing.T) {
 	json.Unmarshal([]byte(lines[1]), &resp2)
 	if resp2.Error != nil {
 		t.Fatalf("tools/list failed: %s", resp2.Error.Message)
+	}
+}
+
+func TestMCPSetTaskRenameShowsNewName(t *testing.T) {
+	store := testStore(t)
+	mcp := NewMCPServer("butler", "1.0.0")
+	registerTools(mcp, store)
+
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "Old name"})
+	resp := mcpCall(mcp, "settask", map[string]interface{}{"task": "Old name", "name": "New name"})
+	text := mcpText(resp)
+	if !strings.Contains(text, "New name") {
+		t.Fatalf("expected new name in output, got: %s", text)
+	}
+	if strings.Contains(text, "Old name") {
+		t.Fatalf("expected old name absent from output, got: %s", text)
+	}
+}
+
+func TestMCPSetRuleRenameShowsNewName(t *testing.T) {
+	store := testStore(t)
+	mcp := NewMCPServer("butler", "1.0.0")
+	registerTools(mcp, store)
+
+	mcpCall(mcp, "addrule", map[string]interface{}{"name": "Old rule"})
+	resp := mcpCall(mcp, "setrule", map[string]interface{}{"seq": float64(1), "name": "New rule"})
+	text := mcpText(resp)
+	if !strings.Contains(text, "New rule") {
+		t.Fatalf("expected new rule name in output, got: %s", text)
+	}
+}
+
+func TestMCPAddTaskRejectsSetTaskFields(t *testing.T) {
+	store := testStore(t)
+	mcp := NewMCPServer("butler", "1.0.0")
+	registerTools(mcp, store)
+
+	for _, field := range []string{"desc", "verify", "deadline", "recur"} {
+		resp := mcpCall(mcp, "addtask", map[string]interface{}{
+			"name": "My task",
+			field:  "some value",
+		})
+		text := mcpText(resp)
+		if !strings.Contains(text, "settask") {
+			t.Fatalf("expected error mentioning settask for %s, got: %s", field, text)
+		}
+	}
+}
+
+func TestMCPGetTaskTagFilterIncludesInheritedChildren(t *testing.T) {
+	store := testStore(t)
+	mcp := NewMCPServer("butler", "1.0.0")
+	registerTools(mcp, store)
+
+	mcpCall(mcp, "addtag", map[string]interface{}{"name": "PROJ"})
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "Parent", "tags": []interface{}{"PROJ"}})
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "child", "under": "Parent"})
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "grandchild", "under": "Parent:1"})
+
+	resp := mcpCall(mcp, "gettask", map[string]interface{}{"tag": "PROJ"})
+	text := mcpText(resp)
+	if !strings.Contains(text, "child") {
+		t.Fatalf("expected inherited child in tag filter, got: %s", text)
+	}
+	if !strings.Contains(text, "grandchild") {
+		t.Fatalf("expected inherited grandchild in tag filter, got: %s", text)
+	}
+}
+
+func TestMCPGetTaskTagFilterSubtaskTaggedParentNot(t *testing.T) {
+	store := testStore(t)
+	mcp := NewMCPServer("butler", "1.0.0")
+	registerTools(mcp, store)
+
+	mcpCall(mcp, "addtag", map[string]interface{}{"name": "DEEP"})
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "Untagged"})
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "tagged child", "under": "Untagged", "tags": []interface{}{"DEEP"}})
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "grandchild", "under": "Untagged:1"})
+
+	resp := mcpCall(mcp, "gettask", map[string]interface{}{"tag": "DEEP"})
+	text := mcpText(resp)
+	if strings.Contains(text, "Untagged") {
+		t.Fatalf("untagged parent should not appear in tag filter, got: %s", text)
+	}
+	if !strings.Contains(text, "tagged child") {
+		t.Fatalf("expected directly tagged child, got: %s", text)
+	}
+	if !strings.Contains(text, "grandchild") {
+		t.Fatalf("expected grandchild inheriting tag from child, got: %s", text)
+	}
+}
+
+func TestMCPGetTaskSingleViewInheritedTag(t *testing.T) {
+	store := testStore(t)
+	mcp := NewMCPServer("butler", "1.0.0")
+	registerTools(mcp, store)
+
+	mcpCall(mcp, "addtag", map[string]interface{}{"name": "PROJ"})
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "Parent", "tags": []interface{}{"PROJ"}})
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "child", "under": "Parent"})
+
+	resp := mcpCall(mcp, "gettask", map[string]interface{}{"task": "Parent:1", "tag": "PROJ"})
+	text := mcpText(resp)
+	if !strings.Contains(text, "child") {
+		t.Fatalf("expected child with inherited tag in single view, got: %s", text)
+	}
+}
+
+func TestMCPAddTaskShowsTagsInResponse(t *testing.T) {
+	store := testStore(t)
+	mcp := NewMCPServer("butler", "1.0.0")
+	registerTools(mcp, store)
+
+	mcpCall(mcp, "addtag", map[string]interface{}{"name": "URGENT"})
+	mcpCall(mcp, "addtag", map[string]interface{}{"name": "BACKEND"})
+
+	resp := mcpCall(mcp, "addtask", map[string]interface{}{
+		"name": "My task",
+		"tags": []interface{}{"URGENT", "BACKEND"},
+	})
+	text := mcpText(resp)
+	if !strings.Contains(text, "#URGENT") || !strings.Contains(text, "#BACKEND") {
+		t.Fatalf("expected both tags in response, got: %s", text)
+	}
+
+	resp = mcpCall(mcp, "addtask", map[string]interface{}{
+		"name": "No tags task",
+	})
+	text = mcpText(resp)
+	if strings.Contains(text, "#") {
+		t.Fatalf("expected no tags in response, got: %s", text)
+	}
+
+	mcpCall(mcp, "addtag", map[string]interface{}{"name": "SOLO"})
+	resp = mcpCall(mcp, "addtask", map[string]interface{}{
+		"name": "One tag task",
+		"tags": []interface{}{"SOLO"},
+	})
+	text = mcpText(resp)
+	if !strings.Contains(text, "#SOLO") {
+		t.Fatalf("expected single tag in response, got: %s", text)
+	}
+}
+
+func TestMCPAddRuleShowsTagsInResponse(t *testing.T) {
+	store := testStore(t)
+	mcp := NewMCPServer("butler", "1.0.0")
+	registerTools(mcp, store)
+
+	mcpCall(mcp, "addtag", map[string]interface{}{"name": "BACKEND"})
+	mcpCall(mcp, "addtag", map[string]interface{}{"name": "FRONTEND"})
+
+	resp := mcpCall(mcp, "addrule", map[string]interface{}{
+		"name": "No force push",
+		"tags": []interface{}{"BACKEND", "FRONTEND"},
+	})
+	text := mcpText(resp)
+	if !strings.Contains(text, "#BACKEND") || !strings.Contains(text, "#FRONTEND") {
+		t.Fatalf("expected both tags in response, got: %s", text)
+	}
+
+	resp = mcpCall(mcp, "addrule", map[string]interface{}{
+		"name": "Be kind",
+	})
+	text = mcpText(resp)
+	if strings.Contains(text, "#") {
+		t.Fatalf("expected no tags in response, got: %s", text)
 	}
 }

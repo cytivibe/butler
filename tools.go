@@ -88,10 +88,19 @@ func registerTools(mcp *MCPServer, store *Store) {
 					return "", err
 				}
 			}
+			for _, field := range []string{"desc", "verify", "deadline", "recur"} {
+				if _, ok := params[field]; ok {
+					return "", fmt.Errorf("%s is a settask field — create the task first, then use settask to set it", field)
+				}
+			}
 			if err := AddTask(store, name, under, parallel, force, tags...); err != nil {
 				return "", err
 			}
-			return fmt.Sprintf("Task added: %s", name), nil
+			msg := fmt.Sprintf("Task added: %s", name)
+			for _, t := range tags {
+				msg += " #" + t
+			}
+			return msg, nil
 		},
 	})
 
@@ -188,16 +197,23 @@ func registerTools(mcp *MCPServer, store *Store) {
 				}
 				opts.Tags = tags
 			}
+			if opts.Name == nil && opts.Status == "" && opts.Desc == nil && opts.Verify == nil && opts.Deadline == nil && opts.Recur == nil && !opts.SetTags && opts.Blockers == nil {
+				return "", fmt.Errorf("at least one field to update is required")
+			}
 			if err := SetTask(store, taskRef, opts); err != nil {
 				return "", err
 			}
-			return fmt.Sprintf("Task updated: %s", taskRef), nil
+			displayName := taskRef
+			if opts.Name != nil {
+				displayName = *opts.Name
+			}
+			return fmt.Sprintf("Task updated: %s", displayName), nil
 		},
 	})
 
 	mcp.AddTool(Tool{
 		Name:        "gettask",
-		Description: "View tasks. Use 'task' for a specific task, or 'all: true' for all tasks. One of 'task' or 'all' is required.",
+		Description: "View tasks. Use 'task' for a specific task, or 'all: true' for all tasks. One of 'task', 'all', 'tag', or 'status' is required.",
 		InputSchema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
@@ -207,7 +223,7 @@ func registerTools(mcp *MCPServer, store *Store) {
 				},
 				"all": map[string]interface{}{
 					"type":        "boolean",
-					"description": "If true, return all tasks. Required when not specifying a specific task.",
+					"description": "If true, return all tasks.",
 				},
 				"details": map[string]interface{}{
 					"type":        "boolean",
@@ -237,17 +253,17 @@ func registerTools(mcp *MCPServer, store *Store) {
 				opts.TaskRef = t
 			}
 			all, _ := params["all"].(bool)
-			if opts.TaskRef == "" && !all {
-				return "", fmt.Errorf("either 'task' or 'all: true' is required")
-			}
-			if d, ok := params["details"].(bool); ok {
-				opts.Details = d
+			if t, ok := params["tag"].(string); ok {
+				opts.Tag = t
 			}
 			if s, ok := params["status"].(string); ok {
 				opts.Status = s
 			}
-			if t, ok := params["tag"].(string); ok {
-				opts.Tag = t
+			if opts.TaskRef == "" && !all && opts.Tag == "" && opts.Status == "" {
+				return "", fmt.Errorf("either 'task' or 'all: true' is required")
+			}
+			if d, ok := params["details"].(bool); ok {
+				opts.Details = d
 			}
 			if d, ok := params["depth"].(float64); ok {
 				opts.Depth = int(d)
@@ -329,7 +345,11 @@ func registerTools(mcp *MCPServer, store *Store) {
 			if err != nil {
 				return "", err
 			}
-			return fmt.Sprintf("Rule %d added: %s", seq, name), nil
+			msg := fmt.Sprintf("Rule %d added: %s", seq, name)
+			for _, t := range tags {
+				msg += " #" + t
+			}
+			return msg, nil
 		},
 	})
 
@@ -410,13 +430,17 @@ func registerTools(mcp *MCPServer, store *Store) {
 
 	mcp.AddTool(Tool{
 		Name:        "gettag",
-		Description: "View tags. Omit 'tag' for all tags, or specify a tag name to see tasks and rules using it.",
+		Description: "View tags. Use 'tag' for a specific tag, or 'all: true' for all tags. One of 'tag' or 'all' is required.",
 		InputSchema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
 				"tag": map[string]interface{}{
 					"type":        "string",
-					"description": "Tag name to view details for. Omit for all tags.",
+					"description": "Tag name to view details for.",
+				},
+				"all": map[string]interface{}{
+					"type":        "boolean",
+					"description": "If true, return all tags.",
 				},
 			},
 		},
@@ -424,6 +448,10 @@ func registerTools(mcp *MCPServer, store *Store) {
 			var opts GetTagOpts
 			if t, ok := params["tag"].(string); ok {
 				opts.Tag = t
+			}
+			all, _ := params["all"].(bool)
+			if opts.Tag == "" && !all {
+				return "", fmt.Errorf("either 'tag' or 'all: true' is required")
 			}
 			tags, err := GetTags(store, opts)
 			if err != nil {
@@ -534,8 +562,14 @@ func registerTools(mcp *MCPServer, store *Store) {
 				}
 				opts.Tags = tags
 			}
+			if opts.Name == nil && !opts.SetTags {
+				return "", fmt.Errorf("at least one field to update is required")
+			}
 			if err := SetRule(store, seq, opts); err != nil {
 				return "", err
+			}
+			if opts.Name != nil {
+				return fmt.Sprintf("Rule %d updated: %s", seq, *opts.Name), nil
 			}
 			return fmt.Sprintf("Rule %d updated", seq), nil
 		},

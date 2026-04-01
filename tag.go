@@ -27,12 +27,12 @@ func insertTags(tx *sql.Tx, table, column string, entityID int, tagNames []strin
 	return nil
 }
 
-// taskHasTag checks if a task has a specific tag (direct only).
+// taskHasTag checks if a task or any ancestor has a specific tag.
 // "NONE" matches tasks where neither the task nor any ancestor has tags.
 func taskHasTag(tx *sql.Tx, taskID int, tag string) bool {
-	if tag == "NONE" {
-		currentID := taskID
-		for {
+	currentID := taskID
+	for {
+		if tag == "NONE" {
 			var count int
 			if err := tx.QueryRow("SELECT COUNT(*) FROM task_tags WHERE task_id = ?", currentID).Scan(&count); err != nil {
 				return false
@@ -40,22 +40,25 @@ func taskHasTag(tx *sql.Tx, taskID int, tag string) bool {
 			if count > 0 {
 				return false
 			}
-			var parentID sql.NullInt64
-			if err := tx.QueryRow("SELECT parent_id FROM tasks WHERE id = ?", currentID).Scan(&parentID); err != nil {
+		} else {
+			var count int
+			if err := tx.QueryRow("SELECT COUNT(*) FROM task_tags tt JOIN tags t ON tt.tag_id = t.id WHERE tt.task_id = ? AND t.name = ?", currentID, tag).Scan(&count); err != nil {
 				return false
 			}
-			if !parentID.Valid {
-				break
+			if count > 0 {
+				return true
 			}
-			currentID = int(parentID.Int64)
 		}
-		return true
+		var parentID sql.NullInt64
+		if err := tx.QueryRow("SELECT parent_id FROM tasks WHERE id = ?", currentID).Scan(&parentID); err != nil {
+			return false
+		}
+		if !parentID.Valid {
+			break
+		}
+		currentID = int(parentID.Int64)
 	}
-	var count int
-	if err := tx.QueryRow("SELECT COUNT(*) FROM task_tags tt JOIN tags t ON tt.tag_id = t.id WHERE tt.task_id = ? AND t.name = ?", taskID, tag).Scan(&count); err != nil {
-		return false
-	}
-	return count > 0
+	return tag == "NONE"
 }
 
 // getDirectTagNames returns tag names directly assigned to a task (not inherited).
