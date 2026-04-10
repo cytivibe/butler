@@ -122,7 +122,7 @@ func runUninstall(args []string) {
 	// Step 2: Clean up PATH on Windows
 	cleanWindowsPath()
 
-	// Step 3: Remove data (retry — Claude Code may respawn butler serve after we kill it)
+	// Step 3: Remove data (retry - Claude Code may respawn butler serve after we kill it)
 	var removeErr error
 	for attempt := 0; attempt < 5; attempt++ {
 		killButlerServe()
@@ -140,7 +140,7 @@ func runUninstall(args []string) {
 
 	// Step 4: Remove binary
 	if runtime.GOOS == "windows" {
-		// Windows can't delete a running exe — schedule deletion after exit
+		// Windows can't delete a running exe - schedule deletion after exit
 		script := fmt.Sprintf(`ping -n 3 127.0.0.1 >nul & del /f "%s" & rmdir /s /q "%s"`,
 			exe, filepath.Dir(exe))
 		cmd := exec.Command("cmd", "/c", "start", "/min", "cmd", "/c", script)

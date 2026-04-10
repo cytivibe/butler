@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-# Butler installer — detects OS/arch, downloads the right binary from GitHub Releases.
+# Butler installer - detects OS/arch, downloads the right binary from GitHub Releases.
 # Usage: curl -fsSL https://raw.githubusercontent.com/cytivibe/butler/main/install.sh | sh
 
 REPO="cytivibe/butler"

@@ -14,7 +14,7 @@ Contributions are welcome. This document covers the process and legal requiremen
 
 - Follow existing code style and patterns
 - Add tests for new functionality
-- Keep changes focused — one concern per PR
+- Keep changes focused - one concern per PR
 
 ## Contributor License Agreement
 

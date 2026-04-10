@@ -420,6 +420,10 @@ func ActivateRecurring(store *Store) error {
 				if _, err := tx.Exec("UPDATE tasks SET status = 'active', status_changed_at = ? WHERE id = ?", nowLocal(), t.id); err != nil {
 					return err
 				}
+				// Reset verify_status so each recurrence cycle requires fresh verification.
+				if _, err := tx.Exec("UPDATE tasks SET verify_status = 'pending' WHERE id = ? AND verification != '' AND verify_status = 'passed'", t.id); err != nil {
+					return err
+				}
 			}
 		}
 		return nil

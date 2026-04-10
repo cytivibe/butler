@@ -31,6 +31,7 @@ type ExportTask struct {
 	Status          string       `json:"status"`
 	Description     string       `json:"description,omitempty"`
 	Verification    string       `json:"verification,omitempty"`
+	VerifyStatus    string       `json:"verify_status,omitempty"`
 	Deadline        string       `json:"deadline,omitempty"`
 	Recur           string       `json:"recur,omitempty"`
 	Parallel        bool         `json:"parallel,omitempty"`
@@ -130,8 +131,8 @@ func exportTask(tx *sql.Tx, taskID int) (ExportTask, error) {
 	var et ExportTask
 	var dl, rc sql.NullString
 	var parallel int
-	err := tx.QueryRow("SELECT name, status, description, verification, deadline, recur, parallel, created_at, status_changed_at FROM tasks WHERE id = ?", taskID).
-		Scan(&et.Name, &et.Status, &et.Description, &et.Verification, &dl, &rc, &parallel, &et.CreatedAt, &et.StatusChangedAt)
+	err := tx.QueryRow("SELECT name, status, description, verification, verify_status, deadline, recur, parallel, created_at, status_changed_at FROM tasks WHERE id = ?", taskID).
+		Scan(&et.Name, &et.Status, &et.Description, &et.Verification, &et.VerifyStatus, &dl, &rc, &parallel, &et.CreatedAt, &et.StatusChangedAt)
 	if err != nil {
 		return et, err
 	}
@@ -176,7 +177,7 @@ func exportTask(tx *sql.Tx, taskID int) (ExportTask, error) {
 		}
 	}
 
-	// Children (ordered by parallel DESC, position ASC — same as display)
+	// Children (ordered by parallel DESC, position ASC - same as display)
 	childRows, err := tx.Query("SELECT id FROM tasks WHERE parent_id = ? ORDER BY parallel DESC, position", taskID)
 	if err != nil {
 		return et, err
@@ -345,8 +346,8 @@ func importTask(tx *sql.Tx, et ExportTask, parentID *int) (int, error) {
 	var result sql.Result
 	var err error
 	if parentID == nil {
-		result, err = tx.Exec("INSERT INTO tasks (name, status, description, verification, deadline, recur, parallel, created_at, status_changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			et.Name, et.Status, et.Description, et.Verification, nullStr(et.Deadline), nullStr(et.Recur), parallel, et.CreatedAt, et.StatusChangedAt)
+		result, err = tx.Exec("INSERT INTO tasks (name, status, description, verification, verify_status, deadline, recur, parallel, created_at, status_changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			et.Name, et.Status, et.Description, et.Verification, et.VerifyStatus, nullStr(et.Deadline), nullStr(et.Recur), parallel, et.CreatedAt, et.StatusChangedAt)
 	} else {
 		// Determine next position among siblings of the same type (parallel/sequential)
 		var maxPos sql.NullInt64
@@ -357,14 +358,21 @@ func importTask(tx *sql.Tx, et ExportTask, parentID *int) (int, error) {
 		if maxPos.Valid {
 			nextPos = int(maxPos.Int64) + 1
 		}
-		result, err = tx.Exec("INSERT INTO tasks (name, parent_id, position, parallel, status, description, verification, deadline, recur, created_at, status_changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			et.Name, *parentID, nextPos, parallel, et.Status, et.Description, et.Verification, nullStr(et.Deadline), nullStr(et.Recur), et.CreatedAt, et.StatusChangedAt)
+		result, err = tx.Exec("INSERT INTO tasks (name, parent_id, position, parallel, status, description, verification, verify_status, deadline, recur, created_at, status_changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			et.Name, *parentID, nextPos, parallel, et.Status, et.Description, et.Verification, et.VerifyStatus, nullStr(et.Deadline), nullStr(et.Recur), et.CreatedAt, et.StatusChangedAt)
 	}
 	if err != nil {
 		return 0, fmt.Errorf("importing task '%s': %w", et.Name, err)
 	}
 	taskID64, _ := result.LastInsertId()
 	taskID := int(taskID64)
+
+	// Backfill verify_status for imports from old exports that lack the field.
+	if et.VerifyStatus == "" && et.Verification != "" {
+		if _, err := tx.Exec("UPDATE tasks SET verify_status = 'pending' WHERE id = ?", taskID); err != nil {
+			return 0, fmt.Errorf("backfilling verify_status for '%s': %w", et.Name, err)
+		}
+	}
 
 	// Tags
 	if len(et.Tags) > 0 {

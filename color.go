@@ -76,6 +76,24 @@ func colorRecur(pattern string) string {
 	return colorCyan.Sprint(s)
 }
 
+// colorVerifyPending returns a styled verify pending badge.
+func colorVerifyPending() string {
+	s := "[verify: pending]"
+	if !cliColor {
+		return s
+	}
+	return colorYellow.Sprint(s)
+}
+
+// colorVerifyPassed returns a styled verify passed badge.
+func colorVerifyPassed() string {
+	s := "[verify: passed]"
+	if !cliColor {
+		return s
+	}
+	return colorGreen.Sprint(s)
+}
+
 // colorTag returns a colored tag like "#URGENT".
 func colorTag(tag string) string {
 	if !cliColor {
@@ -146,7 +164,7 @@ func colorDetailLabel(label string) string {
 	return colorDim.Sprint(label)
 }
 
-// colorDimText returns dim text for detail values — keeps task names prominent.
+// colorDimText returns dim text for detail values - keeps task names prominent.
 func colorDimText(s string) string {
 	if !cliColor {
 		return s

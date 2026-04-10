@@ -13,7 +13,7 @@ import (
 )
 
 // Store is the single layer between the application and the database.
-// All reads and writes go through WriteTx or ReadTx — they handle
+// All reads and writes go through WriteTx or ReadTx - they handle
 // locking, transactions, and rollback automatically.
 type Store struct {
 	db *sql.DB
@@ -38,13 +38,13 @@ func OpenStoreAt(dbPath string) (*Store, error) {
 		return nil, err
 	}
 
-	// One connection. SQLite only supports one writer at a time —
+	// One connection. SQLite only supports one writer at a time -
 	// a pool of connections would just fight over the write lock.
 	db.SetMaxOpenConns(1)
 
 	pragmas := []string{
 		// WAL = Write-Ahead Log. Writes go to a separate log file first,
-		// so a reader doesn't see a half-finished write — it sees the
+		// so a reader doesn't see a half-finished write - it sees the
 		// last fully committed state. Without WAL, a write locks the
 		// entire database file and readers get "database is locked".
 		"PRAGMA journal_mode=WAL",
@@ -54,7 +54,7 @@ func OpenStoreAt(dbPath string) (*Store, error) {
 		"PRAGMA busy_timeout=5000",
 
 		// With WAL, NORMAL is safe. Fsync happens on checkpoint, not
-		// every commit — faster writes, same crash safety guarantees.
+		// every commit - faster writes, same crash safety guarantees.
 		"PRAGMA synchronous=NORMAL",
 
 		// Enforce foreign key constraints. Off by default in SQLite.
@@ -88,6 +88,7 @@ func migrate(db *sql.DB) error {
 			status TEXT DEFAULT 'not_started',
 			description TEXT DEFAULT '',
 			verification TEXT DEFAULT '',
+			verify_status TEXT DEFAULT '',
 			deadline DATETIME,
 			recur TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -131,7 +132,7 @@ func migrate(db *sql.DB) error {
 		}
 	}
 
-	// Add columns to existing tables — ignore errors if they already exist.
+	// Add columns to existing tables - ignore errors if they already exist.
 	alters := []string{
 		"ALTER TABLE tasks ADD COLUMN parent_id INTEGER REFERENCES tasks(id)",
 		"ALTER TABLE tasks ADD COLUMN position INTEGER",
@@ -144,6 +145,7 @@ func migrate(db *sql.DB) error {
 		"ALTER TABLE tasks ADD COLUMN status_changed_at DATETIME DEFAULT CURRENT_TIMESTAMP",
 		"ALTER TABLE tasks ADD COLUMN deadline DATETIME",
 		"ALTER TABLE tasks ADD COLUMN recur TEXT",
+		"ALTER TABLE tasks ADD COLUMN verify_status TEXT DEFAULT ''",
 	}
 	for _, stmt := range alters {
 		db.Exec(stmt)
@@ -154,6 +156,9 @@ func migrate(db *sql.DB) error {
 
 	// Backfill status_changed_at for rows that predate the column.
 	db.Exec("UPDATE tasks SET status_changed_at = created_at WHERE status_changed_at IS NULL")
+
+	// Backfill verify_status for existing tasks that have verification criteria.
+	db.Exec("UPDATE tasks SET verify_status = 'pending' WHERE verification != '' AND (verify_status = '' OR verify_status IS NULL)")
 
 	// Fix seq=0 for existing rules that predate the seq column.
 	db.Exec(`UPDATE rules SET seq = (SELECT COUNT(*) FROM rules r2 WHERE r2.id <= rules.id) WHERE seq = 0 OR seq IS NULL`)
@@ -202,7 +207,7 @@ func migrate(db *sql.DB) error {
 // within this process (matters when butler runs as a long-lived
 // MCP server with concurrent requests).
 //
-// The busy_timeout ensures cross-process safety — if another butler
+// The busy_timeout ensures cross-process safety - if another butler
 // process is writing, this one waits up to 5 seconds for it to finish.
 //
 // If fn returns an error, the transaction is rolled back automatically.
@@ -225,7 +230,7 @@ func (s *Store) WriteTx(fn func(tx *sql.Tx) error) error {
 // ReadTx runs fn inside a read transaction.
 //
 // RLock means multiple reads can proceed concurrently, but if a write
-// is in progress, the read waits for it to finish first — so it always
+// is in progress, the read waits for it to finish first - so it always
 // sees the latest committed data.
 //
 // The transaction is always rolled back at the end (reads don't modify data).

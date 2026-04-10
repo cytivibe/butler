@@ -28,8 +28,9 @@ func TestTagValidation(t *testing.T) {
 	if err := AddTag(store, "TOOLONGTAGS"); err == nil {
 		t.Fatal("expected error for tag > 10 chars")
 	}
-	if err := AddTag(store, "lower"); err == nil {
-		t.Fatal("expected error for lowercase")
+	// "lower" now normalizes to "LOWER" and succeeds
+	if err := AddTag(store, "lower"); err != nil {
+		t.Fatalf("lowercase should normalize to LOWER: %v", err)
 	}
 	if err := AddTag(store, "HAS SPACE"); err == nil {
 		t.Fatal("expected error for space")
@@ -46,6 +47,281 @@ func TestTagValidation(t *testing.T) {
 	}
 	if err := AddTag(store, "V2RELEASE"); err != nil {
 		t.Fatalf("alphanumeric tag should work: %v", err)
+	}
+}
+
+// --- Normalization tests (TDD: written before implementation) ---
+
+func TestNormalizeTagName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+		wantErr  bool
+		desc     string
+	}{
+		// Cosmetic normalization -- should succeed
+		{"BUTLER", "BUTLER", false, "already clean"},
+		{"butler", "BUTLER", false, "lowercase to uppercase"},
+		{"Butler", "BUTLER", false, "mixed case to uppercase"},
+		{"#BUTLER", "BUTLER", false, "strip leading hash"},
+		{"#butler", "BUTLER", false, "strip hash and uppercase"},
+		{`"BUTLER"`, "BUTLER", false, "strip double quotes"},
+		{`'BUTLER'`, "BUTLER", false, "strip single quotes"},
+		{`"#BUTLER"`, "BUTLER", false, "strip quotes then hash"},
+		{`'#BUTLER'`, "BUTLER", false, "strip single quotes then hash"},
+		{`"#butler"`, "BUTLER", false, "strip quotes, hash, and uppercase"},
+		{"  BUTLER  ", "BUTLER", false, "trim whitespace"},
+		{" #BUTLER ", "BUTLER", false, "trim whitespace and strip hash"},
+		{` "#BUTLER" `, "BUTLER", false, "trim whitespace, strip quotes and hash"},
+		{"##BUTLER", "BUTLER", false, "strip multiple leading hashes"},
+		{"V2", "V2", false, "alphanumeric"},
+		{"v2", "V2", false, "alphanumeric lowercase"},
+		{"#V2", "V2", false, "alphanumeric with hash"},
+
+		// Invalid input -- should still fail after normalization
+		{"", "", true, "empty string"},
+		{"   ", "", true, "whitespace only"},
+		{"#", "", true, "hash only"},
+		{`""`, "", true, "empty quotes"},
+		{`"#"`, "", true, "quoted hash only"},
+		{"HAS SPACE", "", true, "internal space"},
+		{`"MY TAG"`, "", true, "quoted but has internal space"},
+		{"NO-DASH", "", true, "dash is invalid"},
+		{"HELLO!", "", true, "exclamation is invalid"},
+		{"TOOLONGTAGS", "", true, "exceeds 10 char limit"},
+		{"NONE", "", true, "reserved name NONE"},
+		{"none", "", true, "reserved name none (after uppercase)"},
+		{"#NONE", "", true, "reserved name with hash"},
+		{`"NONE"`, "", true, "reserved name in quotes"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			got, err := normalizeTagName(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("normalizeTagName(%q) = %q, want error", tt.input, got)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("normalizeTagName(%q) error: %v", tt.input, err)
+				} else if got != tt.expected {
+					t.Errorf("normalizeTagName(%q) = %q, want %q", tt.input, got, tt.expected)
+				}
+			}
+		})
+	}
+}
+
+func TestAddTagNormalization(t *testing.T) {
+	store := testStore(t)
+
+	// Lowercase normalizes to UPPER and succeeds
+	if err := AddTag(store, "urgent"); err != nil {
+		t.Fatalf("lowercase should normalize: %v", err)
+	}
+	tags, _ := GetTags(store, GetTagOpts{})
+	if !strings.Contains(tags[0], "URGENT") {
+		t.Fatalf("expected URGENT in tag list: %v", tags)
+	}
+
+	// Adding same tag with different case is duplicate
+	if err := AddTag(store, "Urgent"); err == nil {
+		t.Fatal("expected duplicate error for case variant")
+	}
+
+	// Hash prefix stripped
+	if err := AddTag(store, "#BACKEND"); err != nil {
+		t.Fatalf("hash prefix should be stripped: %v", err)
+	}
+
+	// Quoted with hash
+	if err := AddTag(store, `"#DESIGN"`); err != nil {
+		t.Fatalf("quoted hash should normalize: %v", err)
+	}
+
+	// Verify all 3 tags exist
+	tags, _ = GetTags(store, GetTagOpts{})
+	if len(tags) != 3 {
+		t.Fatalf("expected 3 tags, got %d: %v", len(tags), tags)
+	}
+}
+
+func TestSetTagNormalization(t *testing.T) {
+	store := testStore(t)
+	AddTag(store, "OLD")
+
+	// Rename using lowercase -- should normalize
+	if err := SetTag(store, "old", "fresh"); err != nil {
+		t.Fatalf("settag with lowercase should normalize both: %v", err)
+	}
+	tags, _ := GetTags(store, GetTagOpts{})
+	if !strings.Contains(tags[0], "FRESH") {
+		t.Fatalf("expected FRESH: %v", tags)
+	}
+
+	// Rename using hash prefix
+	if err := SetTag(store, "#FRESH", "#COOL"); err != nil {
+		t.Fatalf("settag with hash should normalize: %v", err)
+	}
+	tags, _ = GetTags(store, GetTagOpts{})
+	if !strings.Contains(tags[0], "COOL") {
+		t.Fatalf("expected COOL: %v", tags)
+	}
+}
+
+func TestDeleteTagNormalization(t *testing.T) {
+	store := testStore(t)
+	AddTag(store, "DOOMED")
+
+	// Delete using lowercase
+	if err := DeleteTagConfirmed(store, "doomed"); err != nil {
+		t.Fatalf("deletetag with lowercase should normalize: %v", err)
+	}
+	tags, _ := GetTags(store, GetTagOpts{})
+	if len(tags) != 0 {
+		t.Fatalf("expected 0 tags: %v", tags)
+	}
+}
+
+func TestGetTagNormalization(t *testing.T) {
+	store := testStore(t)
+	AddTag(store, "BACKEND")
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{SetTags: true, Tags: []string{"BACKEND"}})
+
+	// Lookup using lowercase
+	tags, err := GetTags(store, GetTagOpts{Tag: "backend"})
+	if err != nil {
+		t.Fatalf("gettag with lowercase should normalize: %v", err)
+	}
+	if !strings.Contains(tags[0], "BACKEND") {
+		t.Fatalf("expected BACKEND: %v", tags)
+	}
+
+	// Lookup using hash
+	tags, err = GetTags(store, GetTagOpts{Tag: "#BACKEND"})
+	if err != nil {
+		t.Fatalf("gettag with hash should normalize: %v", err)
+	}
+	if !strings.Contains(tags[0], "BACKEND") {
+		t.Fatalf("expected BACKEND: %v", tags)
+	}
+}
+
+func TestSetTaskTagNormalization(t *testing.T) {
+	store := testStore(t)
+	AddTag(store, "URGENT")
+	AddTask(store, "T", "", false, false)
+
+	// Set tag using lowercase
+	if err := SetTask(store, "T", SetTaskOpts{SetTags: true, Tags: []string{"urgent"}}); err != nil {
+		t.Fatalf("settask tag lowercase should normalize: %v", err)
+	}
+	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
+	if !strings.Contains(tasks[0], "#URGENT") {
+		t.Fatalf("expected #URGENT: %v", tasks)
+	}
+}
+
+func TestAddTaskTagNormalization(t *testing.T) {
+	store := testStore(t)
+	AddTag(store, "URGENT")
+
+	// Add task with lowercase tag
+	if err := AddTask(store, "T", "", false, false, "urgent"); err != nil {
+		t.Fatalf("addtask with lowercase tag should normalize: %v", err)
+	}
+	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
+	if !strings.Contains(tasks[0], "#URGENT") {
+		t.Fatalf("expected #URGENT: %v", tasks)
+	}
+}
+
+func TestGetTaskTagFilterNormalization(t *testing.T) {
+	store := testStore(t)
+	AddTag(store, "URGENT")
+	AddTask(store, "T", "", false, false, "URGENT")
+
+	// Filter using lowercase
+	tasks, err := GetTasks(store, GetTaskOpts{Tags: []string{"urgent"}, Depth: -1})
+	if err != nil {
+		t.Fatalf("gettask --tag lowercase should normalize: %v", err)
+	}
+	if len(tasks) == 0 || !strings.Contains(tasks[0], "T") {
+		t.Fatalf("expected task T with tag filter: %v", tasks)
+	}
+
+	// Filter using hash
+	tasks, err = GetTasks(store, GetTaskOpts{Tags: []string{"#URGENT"}, Depth: -1})
+	if err != nil {
+		t.Fatalf("gettask --tag #URGENT should normalize: %v", err)
+	}
+	if len(tasks) == 0 {
+		t.Fatalf("expected results with hash filter: %v", tasks)
+	}
+}
+
+func TestAddRuleTagNormalization(t *testing.T) {
+	store := testStore(t)
+	AddTag(store, "POLICY")
+
+	// Add rule with lowercase tag
+	if _, err := AddRule(store, "My Rule", "policy"); err != nil {
+		t.Fatalf("addrule with lowercase tag should normalize: %v", err)
+	}
+	rules, _ := GetRules(store, GetRuleOpts{})
+	if !strings.Contains(rules[0], "#POLICY") {
+		t.Fatalf("expected #POLICY on rule: %v", rules)
+	}
+}
+
+func TestMCPAddTagNormalization(t *testing.T) {
+	store := testStore(t)
+	mcp := NewMCPServer("butler", "1.0.0")
+	registerTools(mcp, store)
+
+	// Add via MCP with lowercase
+	resp := mcpCall(mcp, "addtag", map[string]interface{}{"name": "urgent"})
+	if resp.Error != nil {
+		t.Fatalf("MCP addtag lowercase should normalize: %v", resp.Error.Message)
+	}
+
+	// Add via MCP with hash
+	resp = mcpCall(mcp, "addtag", map[string]interface{}{"name": "#BACKEND"})
+	if resp.Error != nil {
+		t.Fatalf("MCP addtag hash should normalize: %v", resp.Error.Message)
+	}
+
+	// Add via MCP with quoted hash
+	resp = mcpCall(mcp, "addtag", map[string]interface{}{"name": `"#DESIGN"`})
+	if resp.Error != nil {
+		t.Fatalf("MCP addtag quoted hash should normalize: %v", resp.Error.Message)
+	}
+
+	// Verify tags created correctly
+	resp = mcpCall(mcp, "gettag", map[string]interface{}{"all": true})
+	text := mcpText(resp)
+	if !strings.Contains(text, "URGENT") || !strings.Contains(text, "BACKEND") || !strings.Contains(text, "DESIGN") {
+		t.Fatalf("expected all 3 tags: %s", text)
+	}
+}
+
+func TestMCPSetTaskTagNormalization(t *testing.T) {
+	store := testStore(t)
+	mcp := NewMCPServer("butler", "1.0.0")
+	registerTools(mcp, store)
+
+	mcpCall(mcp, "addtag", map[string]interface{}{"name": "URGENT"})
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "T"})
+
+	// Set tag via MCP with lowercase
+	resp := mcpCall(mcp, "settask", map[string]interface{}{
+		"task": "T",
+		"tags": []interface{}{"urgent"},
+	})
+	if resp.Error != nil {
+		t.Fatalf("MCP settask lowercase tag should normalize: %v", resp.Error.Message)
 	}
 }
 
@@ -281,9 +557,12 @@ func TestSetTagValidation(t *testing.T) {
 	store := testStore(t)
 	AddTag(store, "VALID")
 
-	if err := SetTag(store, "VALID", "lower"); err == nil {
-		t.Fatal("expected error for lowercase")
+	// "lower" now normalizes to "LOWER" and succeeds
+	if err := SetTag(store, "VALID", "lower"); err != nil {
+		t.Fatalf("lowercase should normalize to LOWER: %v", err)
 	}
+	// Re-create VALID since it was renamed to LOWER
+	AddTag(store, "VALID")
 	if err := SetTag(store, "VALID", "TOOLONGTAGS"); err == nil {
 		t.Fatal("expected error for > 10 chars")
 	}
@@ -420,7 +699,7 @@ func TestDeleteTagBreaksRuleLink(t *testing.T) {
 		t.Fatalf("expected rule in details before delete: %v", tasks)
 	}
 
-	// Delete tag — rule link broken
+	// Delete tag - rule link broken
 	DeleteTagConfirmed(store, "LINK")
 
 	tasks, _ = GetTasks(store, GetTaskOpts{TaskRef: "T", Details: true, Depth: -1})
@@ -435,6 +714,110 @@ func TestAddTagNoneReserved(t *testing.T) {
 	store := testStore(t)
 	if err := AddTag(store, "NONE"); err == nil {
 		t.Fatal("expected error: NONE is reserved")
+	}
+}
+
+func TestNormalizeTagList(t *testing.T) {
+	tests := []struct {
+		input    []string
+		expected []string
+		wantErr  bool
+		desc     string
+	}{
+		// Single tag
+		{[]string{"URGENT"}, []string{"URGENT"}, false, "single tag passthrough"},
+		{[]string{"urgent"}, []string{"URGENT"}, false, "single tag normalized"},
+		{[]string{"#urgent"}, []string{"URGENT"}, false, "single tag with hash"},
+
+		// Multiple tags via separate elements
+		{[]string{"URGENT", "BACKEND"}, []string{"URGENT", "BACKEND"}, false, "two separate tags"},
+		{[]string{"urgent", "backend"}, []string{"URGENT", "BACKEND"}, false, "two separate lowercase"},
+		{[]string{"#URGENT", "#BACKEND"}, []string{"URGENT", "BACKEND"}, false, "two with hashes"},
+
+		// Comma-separated within single element
+		{[]string{"URGENT,BACKEND"}, []string{"URGENT", "BACKEND"}, false, "comma separated"},
+		{[]string{"urgent,backend"}, []string{"URGENT", "BACKEND"}, false, "comma separated lowercase"},
+		{[]string{"URGENT, BACKEND"}, []string{"URGENT", "BACKEND"}, false, "comma space separated"},
+		{[]string{" URGENT , BACKEND "}, []string{"URGENT", "BACKEND"}, false, "comma with extra whitespace"},
+
+		// Mixed: some comma-separated, some separate elements
+		{[]string{"URGENT,BACKEND", "INFRA"}, []string{"URGENT", "BACKEND", "INFRA"}, false, "mixed comma and separate"},
+
+		// Deduplication
+		{[]string{"URGENT", "URGENT"}, []string{"URGENT"}, false, "dedup same element"},
+		{[]string{"URGENT,URGENT"}, []string{"URGENT"}, false, "dedup within comma"},
+		{[]string{"urgent", "URGENT"}, []string{"URGENT"}, false, "dedup after normalization"},
+
+		// NONE special case
+		{[]string{"NONE"}, []string{"NONE"}, false, "NONE passthrough"},
+		{[]string{"none"}, []string{"NONE"}, false, "none lowercase"},
+		{[]string{"#NONE"}, []string{"NONE"}, false, "NONE with hash"},
+		{[]string{"#none"}, []string{"NONE"}, false, "none with hash lowercase"},
+
+		// NONE mixed with real tags
+		{[]string{"NONE", "URGENT"}, nil, true, "NONE cannot mix with real tags"},
+		{[]string{"URGENT,NONE"}, nil, true, "NONE cannot mix comma"},
+
+		// Empty after split
+		{[]string{""}, nil, true, "empty string"},
+		{[]string{","}, nil, true, "just comma"},
+		{[]string{"URGENT,"}, []string{"URGENT"}, false, "trailing comma ignored"},
+		{[]string{",URGENT"}, []string{"URGENT"}, false, "leading comma ignored"},
+
+		// Invalid tag in list
+		{[]string{"URGENT", "BAD TAG"}, nil, true, "invalid tag in list"},
+		{[]string{"URGENT,TOOLONGTAGS"}, nil, true, "invalid tag in comma list"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			got, err := normalizeTagList(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("normalizeTagList(%v) = %v, want error", tt.input, got)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("normalizeTagList(%v) error: %v", tt.input, err)
+				} else if !slicesEqual(got, tt.expected) {
+					t.Errorf("normalizeTagList(%v) = %v, want %v", tt.input, got, tt.expected)
+				}
+			}
+		})
+	}
+}
+
+// slicesEqual compares two string slices for equality.
+func slicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func TestTagExists(t *testing.T) {
+	store := testStore(t)
+	AddTag(store, "URGENT")
+
+	exists, err := tagExists(store, "URGENT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !exists {
+		t.Fatal("expected URGENT to exist")
+	}
+
+	exists, err = tagExists(store, "NOPE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exists {
+		t.Fatal("expected NOPE to not exist")
 	}
 }
 

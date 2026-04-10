@@ -13,7 +13,7 @@ var serverInstructions string
 
 // MCPServer handles the MCP protocol over stdio.
 // Register tools with AddTool, then call Serve.
-// Same idea as Store — set it up once, never think about
+// Same idea as Store - set it up once, never think about
 // the protocol again when adding new commands.
 type MCPServer struct {
 	name    string
@@ -30,7 +30,7 @@ type Tool struct {
 	Handler     func(params map[string]interface{}) (string, error)
 }
 
-// JSON-RPC 2.0 types — the wire format MCP uses.
+// JSON-RPC 2.0 types - the wire format MCP uses.
 type jsonRPCRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      interface{}     `json:"id,omitempty"`

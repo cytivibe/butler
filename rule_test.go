@@ -98,7 +98,7 @@ func TestGetRuleByTag(t *testing.T) {
 	setRuleTags(store, 1, "BACKEND")
 	setRuleTags(store, 2, "BACKEND", "FRONTEND")
 
-	// Filter by BACKEND — R1 and R2, no tags shown
+	// Filter by BACKEND - R1 and R2, no tags shown
 	rules, _ := GetRules(store, GetRuleOpts{Tag: "BACKEND"})
 	if len(rules) != 2 {
 		t.Fatalf("expected 2 rules, got %d: %v", len(rules), rules)
@@ -270,7 +270,7 @@ func TestSetRuleTagSyncsCounts(t *testing.T) {
 		t.Fatalf("expected '1 rule' after tagging: %v", tags)
 	}
 
-	// Clear tags — counts should revert
+	// Clear tags - counts should revert
 	setRuleTags(store, 1)
 	tags, _ = GetTags(store, GetTagOpts{})
 	if !strings.Contains(tags[0], "POLICY") || !strings.Contains(tags[0], "unused") {

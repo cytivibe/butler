@@ -33,12 +33,22 @@ func isValidTransition(from, to string) bool {
 	return false
 }
 
-// checkDuplicateRootTask checks if a non-archived root task with the same name exists.
+// checkDuplicateTask checks if a non-archived task with the same name exists at the same level.
+// parentID 0 means root level (parent_id IS NULL); >0 means under that parent.
 // If force is true, it archives the existing task. Otherwise returns an error.
-func checkDuplicateRootTask(tx *sql.Tx, name string, force bool, excludeID int) error {
+func checkDuplicateTask(tx *sql.Tx, name string, parentID int, force bool, excludeID int) error {
 	var existingID int
 	var existingStatus string
-	err := tx.QueryRow("SELECT id, status FROM tasks WHERE name = ? AND parent_id IS NULL AND id != ? AND status != 'archived'", name, excludeID).Scan(&existingID, &existingStatus)
+	var query string
+	var args []interface{}
+	if parentID == 0 {
+		query = "SELECT id, status FROM tasks WHERE name = ? COLLATE NOCASE AND parent_id IS NULL AND id != ? AND status != 'archived'"
+		args = []interface{}{name, excludeID}
+	} else {
+		query = "SELECT id, status FROM tasks WHERE name = ? COLLATE NOCASE AND parent_id = ? AND id != ? AND status != 'archived'"
+		args = []interface{}{name, parentID, excludeID}
+	}
+	err := tx.QueryRow(query, args...).Scan(&existingID, &existingStatus)
 	if err == sql.ErrNoRows {
 		return nil
 	}
@@ -46,7 +56,7 @@ func checkDuplicateRootTask(tx *sql.Tx, name string, force bool, excludeID int) 
 		return err
 	}
 	if !force {
-		return fmt.Errorf("task '%s' already exists (status: %s) — use --force to archive it and create a new one", name, existingStatus)
+		return fmt.Errorf("task '%s' already exists (status: %s) - use --force to archive it and create a new one", name, existingStatus)
 	}
 	if _, err := tx.Exec("UPDATE tasks SET status = 'archived', status_changed_at = ? WHERE id = ?", nowLocal(), existingID); err != nil {
 		return err
@@ -65,7 +75,7 @@ func AddTask(store *Store, name string, under string, parallel bool, force bool,
 	}
 	if under == "" {
 		return store.WriteTx(func(tx *sql.Tx) error {
-			if err := checkDuplicateRootTask(tx, name, force, 0); err != nil {
+			if err := checkDuplicateTask(tx, name, 0, force, 0); err != nil {
 				return err
 			}
 			now := nowLocal()
@@ -85,6 +95,10 @@ func AddTask(store *Store, name string, under string, parallel bool, force bool,
 	return store.WriteTx(func(tx *sql.Tx) error {
 		parentID, err := resolveTaskID(tx, namedTask, posPath)
 		if err != nil {
+			return err
+		}
+
+		if err := checkDuplicateTask(tx, name, parentID, force, 0); err != nil {
 			return err
 		}
 
@@ -134,13 +148,71 @@ func AddTask(store *Store, name string, under string, parallel bool, force bool,
 type GetTaskOpts struct {
 	TaskRef string
 	Details bool
-	Status  string // filter by status (empty = no filter)
-	Tag     string // filter by tag (empty = no filter)
-	Depth   int    // -1 = unlimited, 0+ = max depth
-	Sort    string // "recent" = sort by status_changed_at desc
+	Status  string   // filter by status (empty = no filter)
+	Tags    []string // filter by tags (AND: must match all; empty = no filter)
+	NotTags []string // exclude by tags (AND-NOT: must match none; empty = no filter)
+	Depth   int      // -1 = unlimited, 0+ = max depth
+	Sort    string   // "recent" = sort by status_changed_at desc
+}
+
+// tasksMatchFilter checks if a task matches the Tags/NotTags filter.
+func tasksMatchFilter(tx *sql.Tx, taskID int, tags, notTags []string) bool {
+	for _, tag := range tags {
+		if !taskHasTag(tx, taskID, tag) {
+			return false
+		}
+	}
+	for _, tag := range notTags {
+		if taskHasTag(tx, taskID, tag) {
+			return false
+		}
+	}
+	return true
+}
+
+// validateTagsExist checks that all tags in the list exist in the database.
+// NONE is exempt from this check.
+func validateTagsExist(store *Store, tags []string) error {
+	for _, tag := range tags {
+		if tag == "NONE" {
+			continue
+		}
+		exists, err := tagExists(store, tag)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return fmt.Errorf("tag %q does not exist", tag)
+		}
+	}
+	return nil
 }
 
 func GetTasks(store *Store, opts GetTaskOpts) ([]string, error) {
+	if len(opts.Tags) > 0 {
+		normalized, err := normalizeTagList(opts.Tags)
+		if err != nil {
+			return nil, err
+		}
+		opts.Tags = normalized
+	}
+	if len(opts.NotTags) > 0 {
+		normalized, err := normalizeTagList(opts.NotTags)
+		if err != nil {
+			return nil, err
+		}
+		opts.NotTags = normalized
+	}
+	if len(opts.Tags) > 0 {
+		if err := validateTagsExist(store, opts.Tags); err != nil {
+			return nil, err
+		}
+	}
+	if len(opts.NotTags) > 0 {
+		if err := validateTagsExist(store, opts.NotTags); err != nil {
+			return nil, err
+		}
+	}
 	var lines []string
 	err := store.ReadTx(func(tx *sql.Tx) error {
 		now := time.Now()
@@ -151,9 +223,9 @@ func GetTasks(store *Store, opts GetTaskOpts) ([]string, error) {
 			if err != nil {
 				return err
 			}
-			var name, status, description, verification, createdAt, statusChangedAt string
+			var name, status, description, verification, verifyStatus, createdAt, statusChangedAt string
 			var recurNullable sql.NullString
-			err = tx.QueryRow("SELECT name, status, description, verification, created_at, status_changed_at, recur FROM tasks WHERE id = ?", taskID).Scan(&name, &status, &description, &verification, &createdAt, &statusChangedAt, &recurNullable)
+			err = tx.QueryRow("SELECT name, status, description, verification, verify_status, created_at, status_changed_at, recur FROM tasks WHERE id = ?", taskID).Scan(&name, &status, &description, &verification, &verifyStatus, &createdAt, &statusChangedAt, &recurNullable)
 			if err != nil {
 				return err
 			}
@@ -163,10 +235,10 @@ func GetTasks(store *Store, opts GetTaskOpts) ([]string, error) {
 			}
 			deadline := getInheritedDeadline(tx, taskID)
 			rootName, posPrefix, _ := getTaskPath(tx, taskID)
-			tagMatch := opts.Tag == "" || taskHasTag(tx, taskID, opts.Tag)
+			tagMatch := tasksMatchFilter(tx, taskID, opts.Tags, opts.NotTags)
 			if (opts.Status == "" || status == opts.Status) && tagMatch {
 				// Build line with inherited tags instead of direct tags
-				line := formatTaskLine("", posPrefix, name, status, statusChangedAt, deadline, recur, now, taskID, rootName, tx)
+				line := formatTaskLine("", posPrefix, name, status, statusChangedAt, deadline, recur, verifyStatus, now, taskID, rootName, tx)
 				inheritedTags := getInheritedTagNames(tx, taskID)
 				directTags := getEntityTags(tx, "task_tags", "task_id", taskID)
 				// Append parent tags not already shown
@@ -181,7 +253,7 @@ func GetTasks(store *Store, opts GetTaskOpts) ([]string, error) {
 					if cliColor && opts.Depth != 0 && hasChildren(tx, taskID) {
 						detailPrefix = colorTree(treePipe)
 					}
-					appendDetails(&lines, detailPrefix, description, verification, createdAt)
+					appendDetails(&lines, detailPrefix, description, verification, verifyStatus, createdAt)
 					rulesMap := getRulesForTags(tx, inheritedTags)
 					appendRules(&lines, detailPrefix, inheritedTags, rulesMap)
 				}
@@ -202,7 +274,7 @@ func GetTasks(store *Store, opts GetTaskOpts) ([]string, error) {
 		} else if opts.Sort == "deadline" {
 			orderBy = "CASE WHEN deadline IS NULL THEN 1 ELSE 0 END, deadline ASC"
 		}
-		rows, err := tx.Query(fmt.Sprintf("SELECT id, name, status, description, verification, created_at, status_changed_at, deadline, recur FROM tasks WHERE parent_id IS NULL ORDER BY %s", orderBy))
+		rows, err := tx.Query(fmt.Sprintf("SELECT id, name, status, description, verification, verify_status, created_at, status_changed_at, deadline, recur FROM tasks WHERE parent_id IS NULL ORDER BY %s", orderBy))
 		if err != nil {
 			return err
 		}
@@ -212,6 +284,7 @@ func GetTasks(store *Store, opts GetTaskOpts) ([]string, error) {
 			status          string
 			description     string
 			verification    string
+			verifyStatus    string
 			createdAt       string
 			statusChangedAt string
 			deadline        string
@@ -221,7 +294,7 @@ func GetTasks(store *Store, opts GetTaskOpts) ([]string, error) {
 		for rows.Next() {
 			var t namedTaskRow
 			var dl, rc sql.NullString
-			if err := rows.Scan(&t.id, &t.name, &t.status, &t.description, &t.verification, &t.createdAt, &t.statusChangedAt, &dl, &rc); err != nil {
+			if err := rows.Scan(&t.id, &t.name, &t.status, &t.description, &t.verification, &t.verifyStatus, &t.createdAt, &t.statusChangedAt, &dl, &rc); err != nil {
 				rows.Close()
 				return err
 			}
@@ -245,21 +318,21 @@ func GetTasks(store *Store, opts GetTaskOpts) ([]string, error) {
 				continue
 			}
 			statusMatch := opts.Status == "" || t.status == opts.Status
-			tagMatch := opts.Tag == "" || taskHasTag(tx, t.id, opts.Tag)
+			tagMatch := tasksMatchFilter(tx, t.id, opts.Tags, opts.NotTags)
 			if statusMatch && tagMatch {
 				// Blank line between root tasks for readability
 				if cliColor && !firstShown {
 					lines = append(lines, "")
 				}
 				firstShown = false
-				lines = append(lines, formatTaskLine("", "", t.name, t.status, t.statusChangedAt, t.deadline, t.recur, now, t.id, t.name, tx))
+				lines = append(lines, formatTaskLine("", "", t.name, t.status, t.statusChangedAt, t.deadline, t.recur, t.verifyStatus, now, t.id, t.name, tx))
 				if opts.Details {
 					// Use │ prefix for details when task has children (so tree connects)
 					detailPrefix := ""
 					if cliColor && opts.Depth != 0 && hasChildren(tx, t.id) {
 						detailPrefix = colorTree(treePipe)
 					}
-					appendDetails(&lines, detailPrefix, t.description, t.verification, t.createdAt)
+					appendDetails(&lines, detailPrefix, t.description, t.verification, t.verifyStatus, t.createdAt)
 					directTags := getInheritedTagNames(tx, t.id)
 					rulesMap := getRulesForTags(tx, directTags)
 					appendRules(&lines, detailPrefix, directTags, rulesMap)
@@ -280,7 +353,7 @@ func GetTasks(store *Store, opts GetTaskOpts) ([]string, error) {
 	return lines, err
 }
 
-func appendDetails(lines *[]string, prefix string, description, verification, createdAt string) {
+func appendDetails(lines *[]string, prefix string, description, verification, verifyStatus, createdAt string) {
 	*lines = append(*lines, fmt.Sprintf("%s  %s %s", prefix, colorDetailLabel("created:"), colorDimText(formatTimestamp(createdAt))))
 	if description != "" {
 		*lines = append(*lines, fmt.Sprintf("%s  %s %s", prefix, colorDetailLabel("desc:"), colorDimText(description)))
@@ -288,21 +361,25 @@ func appendDetails(lines *[]string, prefix string, description, verification, cr
 	if verification != "" {
 		*lines = append(*lines, fmt.Sprintf("%s  %s %s", prefix, colorDetailLabel("verify:"), colorDimText(verification)))
 	}
+	if verifyStatus != "" {
+		*lines = append(*lines, fmt.Sprintf("%s  %s %s", prefix, colorDetailLabel("verify status:"), colorDimText(verifyStatus)))
+	}
 }
 
 // SetTaskOpts holds optional fields for SetTask.
 // Nil pointers mean "don't change". Empty Status means "don't change".
 type SetTaskOpts struct {
-	Name     *string  // new task name (nil = don't change)
-	Status   string   // "wait" requires Blockers; "waiting" is invalid (use "wait")
-	Blockers []string // blocker refs, replaces existing blockers when Status == "wait"
-	Desc     *string
-	Verify   *string
-	Deadline *string  // "none" clears, date or datetime string sets
-	Recur    *string  // "none" clears, recurrence pattern string sets
-	SetTags  bool     // if true, replace all tags with Tags
-	Tags     []string // tag names (only used when SetTags is true)
-	Force    bool     // if true, archive conflicting task when renaming
+	Name         *string  // new task name (nil = don't change)
+	Status       string   // "wait" requires Blockers; "waiting" is invalid (use "wait")
+	Blockers     []string // blocker refs, replaces existing blockers when Status == "wait"
+	Desc         *string
+	Verify       *string
+	VerifyStatus *string // "passed" or "pending" (nil = don't change)
+	Deadline     *string // "none" clears, date or datetime string sets
+	Recur        *string // "none" clears, recurrence pattern string sets
+	SetTags      bool    // if true, replace all tags with Tags
+	Tags         []string // tag names (only used when SetTags is true)
+	Force        bool    // if true, archive conflicting task when renaming
 }
 
 // inheritedStatuses are parent statuses that override children at display time.
@@ -331,7 +408,7 @@ type subTaskContext struct {
 
 func collectSubTasksFiltered(ctx subTaskContext, parentID int, lines *[]string) error {
 	tx := ctx.tx
-	rows, err := tx.Query("SELECT id, name, position, parallel, status, description, verification, created_at, status_changed_at, deadline, recur FROM tasks WHERE parent_id = ? ORDER BY parallel DESC, position", parentID)
+	rows, err := tx.Query("SELECT id, name, position, parallel, status, description, verification, verify_status, created_at, status_changed_at, deadline, recur FROM tasks WHERE parent_id = ? ORDER BY parallel DESC, position", parentID)
 	if err != nil {
 		return err
 	}
@@ -343,6 +420,7 @@ func collectSubTasksFiltered(ctx subTaskContext, parentID int, lines *[]string) 
 		status          string
 		description     string
 		verification    string
+		verifyStatus    string
 		createdAt       string
 		statusChangedAt string
 		deadline        string
@@ -352,7 +430,7 @@ func collectSubTasksFiltered(ctx subTaskContext, parentID int, lines *[]string) 
 	for rows.Next() {
 		var s sub
 		var dl, rc sql.NullString
-		if err := rows.Scan(&s.id, &s.name, &s.position, &s.parallel, &s.status, &s.description, &s.verification, &s.createdAt, &s.statusChangedAt, &dl, &rc); err != nil {
+		if err := rows.Scan(&s.id, &s.name, &s.position, &s.parallel, &s.status, &s.description, &s.verification, &s.verifyStatus, &s.createdAt, &s.statusChangedAt, &dl, &rc); err != nil {
 			rows.Close()
 			return err
 		}
@@ -408,7 +486,7 @@ func collectSubTasksFiltered(ctx subTaskContext, parentID int, lines *[]string) 
 	for i, v := range visible {
 		isLast := i == len(visible)-1
 		statusMatch := ctx.opts.Status == "" || v.displayStatus == ctx.opts.Status
-		tagMatch := ctx.opts.Tag == "" || ctx.parentMatchedTag || taskHasTag(tx, v.id, ctx.opts.Tag)
+		tagMatch := (len(ctx.opts.Tags) == 0 && len(ctx.opts.NotTags) == 0) || (ctx.parentMatchedTag && len(ctx.opts.NotTags) == 0) || tasksMatchFilter(tx, v.id, ctx.opts.Tags, ctx.opts.NotTags)
 
 		// Tree connector for this item
 		var linePrefix, detailPrefix string
@@ -429,14 +507,14 @@ func collectSubTasksFiltered(ctx subTaskContext, parentID int, lines *[]string) 
 		}
 
 		if statusMatch && tagMatch {
-			lines = appendLine(lines, formatTaskLine(linePrefix, v.path, v.name, v.displayStatus, v.displayTime, v.displayDeadline, v.recur, ctx.now, v.id, ctx.namedTaskName, tx))
+			lines = appendLine(lines, formatTaskLine(linePrefix, v.path, v.name, v.displayStatus, v.displayTime, v.displayDeadline, v.recur, v.verifyStatus, ctx.now, v.id, ctx.namedTaskName, tx))
 			if ctx.opts.Details {
 				// If this subtask has children, add │ pipe so details connect to the tree below
 				dp := detailPrefix
 				if cliColor && (ctx.opts.Depth == -1 || ctx.currentDepth < ctx.opts.Depth) && hasChildren(tx, v.id) {
 					dp = detailPrefix + colorTree(treePipe)
 				}
-				appendDetails(lines, dp, v.description, v.verification, v.createdAt)
+				appendDetails(lines, dp, v.description, v.verification, v.verifyStatus, v.createdAt)
 				directTags := getDirectTagNames(tx, v.id)
 				if len(directTags) > 0 {
 					rulesMap := getRulesForTags(tx, directTags)
@@ -482,7 +560,7 @@ func appendLine(lines *[]string, line string) *[]string {
 	return lines
 }
 
-func formatTaskLine(prefix, path, name, status, statusTime, deadline, recur string, now time.Time, taskID int, namedTaskName string, tx *sql.Tx) string {
+func formatTaskLine(prefix, path, name, status, statusTime, deadline, recur, verifyStatus string, now time.Time, taskID int, namedTaskName string, tx *sql.Tx) string {
 	statusTag := colorStatus(status, statusTime)
 	displayName := colorTaskName(name)
 	var line string
@@ -514,6 +592,11 @@ func formatTaskLine(prefix, path, name, status, statusTime, deadline, recur stri
 	if recur != "" {
 		line += " " + colorRecur(recur)
 	}
+	if verifyStatus == "pending" {
+		line += " " + colorVerifyPending()
+	} else if verifyStatus == "passed" {
+		line += " " + colorVerifyPassed()
+	}
 	tags := getEntityTags(tx, "task_tags", "task_id", taskID)
 	if tags != "" {
 		line += " " + colorTags(tags)
@@ -538,10 +621,12 @@ func SetTask(store *Store, taskRef string, opts SetTaskOpts) error {
 			if err := tx.QueryRow("SELECT parent_id FROM tasks WHERE id = ?", taskID).Scan(&parentID); err != nil {
 				return err
 			}
-			if !parentID.Valid {
-				if err := checkDuplicateRootTask(tx, *opts.Name, opts.Force, taskID); err != nil {
-					return err
-				}
+			dupParent := 0
+			if parentID.Valid {
+				dupParent = int(parentID.Int64)
+			}
+			if err := checkDuplicateTask(tx, *opts.Name, dupParent, opts.Force, taskID); err != nil {
+				return err
 			}
 			if _, err := tx.Exec("UPDATE tasks SET name = ? WHERE id = ?", *opts.Name, taskID); err != nil {
 				return err
@@ -552,8 +637,35 @@ func SetTask(store *Store, taskRef string, opts SetTaskOpts) error {
 				return err
 			}
 		}
+		if opts.Verify != nil && opts.VerifyStatus != nil {
+			return fmt.Errorf("cannot set --verify and --verify-status in the same call")
+		}
 		if opts.Verify != nil {
-			if _, err := tx.Exec("UPDATE tasks SET verification = ? WHERE id = ?", *opts.Verify, taskID); err != nil {
+			if strings.EqualFold(*opts.Verify, "none") {
+				// Clear both criteria and status
+				if _, err := tx.Exec("UPDATE tasks SET verification = '', verify_status = '' WHERE id = ?", taskID); err != nil {
+					return err
+				}
+			} else {
+				// Set criteria and auto-set status to pending
+				if _, err := tx.Exec("UPDATE tasks SET verification = ?, verify_status = 'pending' WHERE id = ?", *opts.Verify, taskID); err != nil {
+					return err
+				}
+			}
+		}
+		if opts.VerifyStatus != nil {
+			var currentVerification string
+			if err := tx.QueryRow("SELECT verification FROM tasks WHERE id = ?", taskID).Scan(&currentVerification); err != nil {
+				return err
+			}
+			if currentVerification == "" {
+				return fmt.Errorf("cannot set verify status: task has no verification criteria")
+			}
+			vs := strings.ToLower(*opts.VerifyStatus)
+			if vs != "passed" && vs != "pending" {
+				return fmt.Errorf("invalid verify status '%s': must be 'passed' or 'pending'", *opts.VerifyStatus)
+			}
+			if _, err := tx.Exec("UPDATE tasks SET verify_status = ? WHERE id = ?", vs, taskID); err != nil {
 				return err
 			}
 		}
@@ -634,7 +746,7 @@ func SetTask(store *Store, taskRef string, opts SetTaskOpts) error {
 					return fmt.Errorf("a task cannot wait on itself")
 				}
 				if ancestor, _ := isAncestor(tx, taskID, blockerID); ancestor {
-					return fmt.Errorf("a subtask cannot wait on its own ancestor — would deadlock")
+					return fmt.Errorf("a subtask cannot wait on its own ancestor - would deadlock")
 				}
 				if _, err := tx.Exec("INSERT INTO task_blockers (task_id, blocker_id) VALUES (?, ?)", taskID, blockerID); err != nil {
 					return err
@@ -669,6 +781,13 @@ func SetTask(store *Store, taskRef string, opts SetTaskOpts) error {
 			if incomplete > 0 {
 				return fmt.Errorf("cannot complete: %d child task(s) still incomplete", incomplete)
 			}
+			var verifyStatus string
+			if err := tx.QueryRow("SELECT verify_status FROM tasks WHERE id = ?", taskID).Scan(&verifyStatus); err != nil {
+				return err
+			}
+			if verifyStatus != "" && verifyStatus != "passed" {
+				return fmt.Errorf("cannot complete: verification not passed (use --verify-status passed first)")
+			}
 		}
 
 		_, err = tx.Exec("UPDATE tasks SET status = ?, status_changed_at = ? WHERE id = ?", newStatus, nowLocal(), taskID)
@@ -689,6 +808,10 @@ func SetTask(store *Store, taskRef string, opts SetTaskOpts) error {
 			if err := reopenAncestors(tx, taskID); err != nil {
 				return err
 			}
+			// Reset verification to pending if it was passed
+			if _, err := tx.Exec("UPDATE tasks SET verify_status = 'pending' WHERE id = ? AND verify_status = 'passed'", taskID); err != nil {
+				return err
+			}
 		}
 
 		if newStatus == "completed" {
@@ -702,7 +825,7 @@ func SetTask(store *Store, taskRef string, opts SetTaskOpts) error {
 				return err
 			}
 			if parentID.Valid {
-				return fmt.Errorf("only named tasks can be archived — archive the parent task instead")
+				return fmt.Errorf("only named tasks can be archived - archive the parent task instead")
 			}
 			if err := archiveChildren(tx, taskID); err != nil {
 				return err

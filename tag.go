@@ -13,11 +13,16 @@ func insertTags(tx *sql.Tx, table, column string, entityID int, tagNames []strin
 	if !allowedTagTables[table] || !allowedTagColumns[column] {
 		return fmt.Errorf("invalid table/column: %s/%s", table, column)
 	}
-	for _, name := range tagNames {
-		var tagID int
-		err := tx.QueryRow("SELECT id FROM tags WHERE name = ?", name).Scan(&tagID)
+	for i, name := range tagNames {
+		n, err := normalizeTagName(name)
 		if err != nil {
-			return fmt.Errorf("tag '%s' not found — add it first with addtag", name)
+			return err
+		}
+		tagNames[i] = n
+		var tagID int
+		err = tx.QueryRow("SELECT id FROM tags WHERE name = ?", n).Scan(&tagID)
+		if err != nil {
+			return fmt.Errorf("tag '%s' not found - add it first with addtag", name)
 		}
 		_, err = tx.Exec(fmt.Sprintf("INSERT OR IGNORE INTO %s (%s, tag_id) VALUES (?, ?)", table, column), entityID, tagID)
 		if err != nil {
@@ -30,6 +35,11 @@ func insertTags(tx *sql.Tx, table, column string, entityID int, tagNames []strin
 // taskHasTag checks if a task or any ancestor has a specific tag.
 // "NONE" matches tasks where neither the task nor any ancestor has tags.
 func taskHasTag(tx *sql.Tx, taskID int, tag string) bool {
+	if n, err := normalizeTagName(tag); err == nil {
+		tag = n
+	}
+	// "NONE" is a reserved name that normalizeTagName rejects, but it's
+	// valid here as a special filter meaning "no tags". Keep it as-is.
 	currentID := taskID
 	for {
 		if tag == "NONE" {
@@ -222,11 +232,12 @@ func syncRuleTagFlags(tx *sql.Tx, tagNames []string) error {
 }
 
 func AddTag(store *Store, name string) error {
-	if err := validateTagName(name); err != nil {
+	n, err := normalizeTagName(name)
+	if err != nil {
 		return err
 	}
 	return store.WriteTx(func(tx *sql.Tx) error {
-		_, err := tx.Exec("INSERT INTO tags (name, created_at) VALUES (?, ?)", name, nowLocal())
+		_, err := tx.Exec("INSERT INTO tags (name, created_at) VALUES (?, ?)", n, nowLocal())
 		if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 			return fmt.Errorf("tag '%s' already exists", name)
 		}
@@ -243,6 +254,11 @@ func GetTags(store *Store, opts GetTagOpts) ([]string, error) {
 	var lines []string
 	err := store.ReadTx(func(tx *sql.Tx) error {
 		if opts.Tag != "" {
+			normalized, nerr := normalizeTagName(opts.Tag)
+			if nerr != nil {
+				return nerr
+			}
+			opts.Tag = normalized
 			var tagID int
 			err := tx.QueryRow("SELECT id FROM tags WHERE name = ?", opts.Tag).Scan(&tagID)
 			if err != nil {
@@ -388,6 +404,76 @@ func tagCountHeader(tx *sql.Tx, tagID int, name string) (string, error) {
 	return fmt.Sprintf("%s  %s", coloredName, colorDimText(strings.Join(parts, ", "))), nil
 }
 
+// normalizeTagName strips cosmetic noise (whitespace, quotes, #, case)
+// and then validates. Returns the cleaned name or an error.
+func normalizeTagName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	// Strip matching outer quotes
+	if len(name) >= 2 {
+		if (name[0] == '"' && name[len(name)-1] == '"') || (name[0] == '\'' && name[len(name)-1] == '\'') {
+			name = name[1 : len(name)-1]
+		}
+	}
+	name = strings.TrimSpace(name)
+	// Strip leading # characters
+	name = strings.TrimLeft(name, "#")
+	name = strings.TrimSpace(name)
+	name = strings.ToUpper(name)
+	if err := validateTagName(name); err != nil {
+		return "", err
+	}
+	return name, nil
+}
+
+// normalizeTagList splits each element on commas, normalizes each piece,
+// deduplicates, and returns the cleaned list. NONE is allowed but cannot
+// be mixed with other tags.
+func normalizeTagList(raw []string) ([]string, error) {
+	var result []string
+	seen := make(map[string]bool)
+	for _, r := range raw {
+		parts := strings.Split(r, ",")
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			upper := strings.ToUpper(strings.TrimSpace(strings.TrimLeft(p, "#")))
+			if upper == "NONE" {
+				if !seen["NONE"] {
+					result = append(result, "NONE")
+					seen["NONE"] = true
+				}
+				continue
+			}
+			n, err := normalizeTagName(p)
+			if err != nil {
+				return nil, fmt.Errorf("invalid tag %q: %w", p, err)
+			}
+			if !seen[n] {
+				result = append(result, n)
+				seen[n] = true
+			}
+		}
+	}
+	if len(result) == 0 {
+		return nil, fmt.Errorf("no valid tags provided")
+	}
+	if seen["NONE"] && len(result) > 1 {
+		return nil, fmt.Errorf("NONE cannot be combined with other tags")
+	}
+	return result, nil
+}
+
+// tagExists checks whether a tag with the given name exists in the database.
+func tagExists(store *Store, name string) (bool, error) {
+	var count int
+	err := store.ReadTx(func(tx *sql.Tx) error {
+		return tx.QueryRow("SELECT COUNT(*) FROM tags WHERE name = ?", name).Scan(&count)
+	})
+	return count > 0, err
+}
+
 func validateTagName(name string) error {
 	if len(name) == 0 {
 		return fmt.Errorf("tag cannot be empty")
@@ -408,7 +494,13 @@ func validateTagName(name string) error {
 
 // SetTag renames a tag.
 func SetTag(store *Store, oldName, newName string) error {
-	if err := validateTagName(newName); err != nil {
+	var err error
+	oldName, err = normalizeTagName(oldName)
+	if err != nil {
+		return err
+	}
+	newName, err = normalizeTagName(newName)
+	if err != nil {
 		return err
 	}
 	return store.WriteTx(func(tx *sql.Tx) error {
@@ -427,6 +519,10 @@ func SetTag(store *Store, oldName, newName string) error {
 
 // DeleteTagInfo returns info about a tag for confirmation prompts.
 func DeleteTagInfo(store *Store, name string) (taskCount, ruleCount int, err error) {
+	name, err = normalizeTagName(name)
+	if err != nil {
+		return 0, 0, err
+	}
 	err = store.ReadTx(func(tx *sql.Tx) error {
 		var tagID int
 		err := tx.QueryRow("SELECT id FROM tags WHERE name = ?", name).Scan(&tagID)
@@ -446,6 +542,10 @@ func DeleteTagInfo(store *Store, name string) (taskCount, ruleCount int, err err
 
 // DeleteTagConfirmed permanently deletes a tag and removes it from all tasks and rules.
 func DeleteTagConfirmed(store *Store, name string) error {
+	name, nerr := normalizeTagName(name)
+	if nerr != nil {
+		return nerr
+	}
 	return store.WriteTx(func(tx *sql.Tx) error {
 		var tagID int
 		err := tx.QueryRow("SELECT id FROM tags WHERE name = ?", name).Scan(&tagID)
@@ -468,6 +568,10 @@ func DeleteTagConfirmed(store *Store, name string) error {
 // DeleteTagAtomic combines info gathering and deletion in a single WriteTx.
 // Returns task/rule counts and any error. Used by MCP to avoid TOCTOU.
 func DeleteTagAtomic(store *Store, name string) (taskCount, ruleCount int, err error) {
+	name, err = normalizeTagName(name)
+	if err != nil {
+		return 0, 0, err
+	}
 	err = store.WriteTx(func(tx *sql.Tx) error {
 		var tagID int
 		err := tx.QueryRow("SELECT id FROM tags WHERE name = ?", name).Scan(&tagID)

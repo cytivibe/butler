@@ -37,7 +37,7 @@ func TestGetSingleTask(t *testing.T) {
 	AddTask(store, "T2", "", false, false)
 	AddTask(store, "other", "T2", false, false)
 
-	// Get specific named task — should show T1 and its children, not T2
+	// Get specific named task - should show T1 and its children, not T2
 	tasks, _ := GetTasks(store, GetTaskOpts{TaskRef: "T1", Depth: -1})
 	if len(tasks) != 4 {
 		t.Fatalf("expected 4 lines (T1 + 3 children), got %d: %v", len(tasks), tasks)
@@ -48,7 +48,7 @@ func TestGetSingleTask(t *testing.T) {
 		}
 	}
 
-	// Get specific subtask — should show s1 and its child
+	// Get specific subtask - should show s1 and its child
 	tasks, _ = GetTasks(store, GetTaskOpts{TaskRef: "T1:1", Depth: -1})
 	if len(tasks) != 2 {
 		t.Fatalf("expected 2 lines (s1 + deep), got %d: %v", len(tasks), tasks)
@@ -99,13 +99,13 @@ func TestGetTaskDepthOnSingleTask(t *testing.T) {
 	AddTask(store, "deep", "T:1", false, false)
 	AddTask(store, "deeper", "T:1.1", false, false)
 
-	// Single task with depth 0 — just the task
+	// Single task with depth 0 - just the task
 	tasks, _ := GetTasks(store, GetTaskOpts{TaskRef: "T:1", Depth: 0})
 	if len(tasks) != 1 {
 		t.Fatalf("expected 1 line (s1 only), got %d: %v", len(tasks), tasks)
 	}
 
-	// Single task with depth 1 — task + direct children
+	// Single task with depth 1 - task + direct children
 	tasks, _ = GetTasks(store, GetTaskOpts{TaskRef: "T:1", Depth: 1})
 	if len(tasks) != 2 {
 		t.Fatalf("expected 2 lines (s1 + deep), got %d: %v", len(tasks), tasks)
@@ -123,7 +123,7 @@ func TestGetTaskFilterByStatus(t *testing.T) {
 	setStatus(store, "T:2", "active")
 	setStatus(store, "T:2", "completed")
 
-	// Filter by active — should show T (active via auto-activate), s1 (active)
+	// Filter by active - should show T (active via auto-activate), s1 (active)
 	tasks, _ := GetTasks(store, GetTaskOpts{Status: "active", Depth: -1})
 	for _, line := range tasks {
 		if strings.Contains(line, "s2") || strings.Contains(line, "s3") {
@@ -197,7 +197,7 @@ func TestGetTaskDepthWithDetails(t *testing.T) {
 	SetTask(store, "T:1", SetTaskOpts{Desc: strPtr("child desc")})
 	SetTask(store, "T:1.1", SetTaskOpts{Desc: strPtr("grand desc")})
 
-	// Depth 1 + details — should show T desc and s1 desc, not deep desc
+	// Depth 1 + details - should show T desc and s1 desc, not deep desc
 	tasks, _ := GetTasks(store, GetTaskOpts{Details: true, Depth: 1})
 	hasRoot := false
 	hasChild := false
@@ -229,8 +229,8 @@ func TestGetTaskFilterByTag(t *testing.T) {
 	SetTask(store, "T2", SetTaskOpts{SetTags: true, Tags: []string{"URGENT", "BACKEND"}})
 	SetTask(store, "T3", SetTaskOpts{SetTags: true, Tags: []string{"BACKEND"}})
 
-	// Filter by URGENT — should show T1 and T2
-	tasks, _ := GetTasks(store, GetTaskOpts{Tag: "URGENT", Depth: -1})
+	// Filter by URGENT - should show T1 and T2
+	tasks, _ := GetTasks(store, GetTaskOpts{Tags: []string{"URGENT"}, Depth: -1})
 	if len(tasks) != 2 {
 		t.Fatalf("expected 2 urgent tasks, got %d: %v", len(tasks), tasks)
 	}
@@ -240,8 +240,8 @@ func TestGetTaskFilterByTag(t *testing.T) {
 		}
 	}
 
-	// Filter by BACKEND — should show T2 and T3
-	tasks, _ = GetTasks(store, GetTaskOpts{Tag: "BACKEND", Depth: -1})
+	// Filter by BACKEND - should show T2 and T3
+	tasks, _ = GetTasks(store, GetTaskOpts{Tags: []string{"BACKEND"}, Depth: -1})
 	if len(tasks) != 2 {
 		t.Fatalf("expected 2 backend tasks, got %d: %v", len(tasks), tasks)
 	}
@@ -257,8 +257,8 @@ func TestGetTaskFilterByTagAndStatus(t *testing.T) {
 	SetTask(store, "T2", SetTaskOpts{SetTags: true, Tags: []string{"URGENT"}})
 	setStatus(store, "T1", "active")
 
-	// Filter by URGENT + active — should show only T1
-	tasks, _ := GetTasks(store, GetTaskOpts{Tag: "URGENT", Status: "active", Depth: -1})
+	// Filter by URGENT + active - should show only T1
+	tasks, _ := GetTasks(store, GetTaskOpts{Tags: []string{"URGENT"}, Status: "active", Depth: -1})
 	if len(tasks) != 1 {
 		t.Fatalf("expected 1 active+urgent task, got %d: %v", len(tasks), tasks)
 	}
@@ -274,8 +274,8 @@ func TestGetTaskFilterByTagNone(t *testing.T) {
 	AddTag(store, "X")
 	SetTask(store, "Tagged", SetTaskOpts{SetTags: true, Tags: []string{"X"}})
 
-	// Filter by NONE — should show only untagged task
-	tasks, _ := GetTasks(store, GetTaskOpts{Tag: "NONE", Depth: -1})
+	// Filter by NONE - should show only untagged task
+	tasks, _ := GetTasks(store, GetTaskOpts{Tags: []string{"NONE"}, Depth: -1})
 	if len(tasks) != 1 {
 		t.Fatalf("expected 1 untagged task, got %d: %v", len(tasks), tasks)
 	}
@@ -291,8 +291,8 @@ func TestGetTaskFilterByTagNoneExcludesChildrenOfTagged(t *testing.T) {
 	AddTag(store, "X")
 	SetTask(store, "Parent", SetTaskOpts{SetTags: true, Tags: []string{"X"}})
 
-	// child has no direct tags but parent does — should NOT appear in NONE
-	tasks, _ := GetTasks(store, GetTaskOpts{Tag: "NONE", Depth: -1})
+	// child has no direct tags but parent does - should NOT appear in NONE
+	tasks, _ := GetTasks(store, GetTaskOpts{Tags: []string{"NONE"}, Depth: -1})
 	for _, line := range tasks {
 		if strings.Contains(line, "child") {
 			t.Fatalf("children of tagged parents should not appear in NONE: %v", tasks)
@@ -435,8 +435,12 @@ func TestSetDescriptionAndVerification(t *testing.T) {
 
 	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
 	for _, line := range tasks {
-		if strings.Contains(line, "desc:") || strings.Contains(line, "verify:") {
-			t.Fatalf("details should be hidden without --details: %v", tasks)
+		if strings.Contains(line, "desc:") {
+			t.Fatalf("description should be hidden without --details: %v", tasks)
+		}
+		// The [verify: pending] badge is expected; only the details line "verify: ..." should be hidden
+		if strings.Contains(line, "verify:") && !strings.Contains(line, "[verify:") {
+			t.Fatalf("verify details should be hidden without --details: %v", tasks)
 		}
 	}
 
@@ -528,7 +532,7 @@ func TestInheritedStatusUsesParentTimestamp(t *testing.T) {
 	setStatus(store, "P:1", "active")
 	setStatus(store, "P", "deferred")
 
-	// Both parent and child should show deferred — child inherits parent's display
+	// Both parent and child should show deferred - child inherits parent's display
 	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
 	for _, line := range tasks {
 		if strings.Contains(line, "child") {
@@ -568,7 +572,7 @@ func TestSortRecent(t *testing.T) {
 		t.Fatalf("expected 'First' first without sort: %v", tasks)
 	}
 
-	// Activate only "First" — it now has a more recent status_changed_at
+	// Activate only "First" - it now has a more recent status_changed_at
 	setStatus(store, "First", "active")
 
 	// With sort=recent, "First" (active, changed later) should come before "Second" (not_started, older created_at)
@@ -726,7 +730,7 @@ func TestDeadlineInheritedOnSingleTaskView(t *testing.T) {
 	dl := "2026-04-15"
 	SetTask(store, "P", SetTaskOpts{Deadline: &dl})
 
-	// View child directly — should show inherited deadline
+	// View child directly - should show inherited deadline
 	tasks, _ := GetTasks(store, GetTaskOpts{TaskRef: "P:1", Depth: -1})
 	if !strings.Contains(tasks[0], "[deadline: Apr 15]") {
 		t.Fatalf("single task view should show inherited deadline: %v", tasks)
@@ -1160,16 +1164,16 @@ func TestMultipleBlockers(t *testing.T) {
 	setStatus(store, "A:3", "active")
 	setWait(store, "A:3", "A:1", "A:2")
 
-	// Complete only one blocker — should stay waiting
+	// Complete only one blocker - should stay waiting
 	setStatus(store, "A:1", "completed")
 	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
 	for _, line := range tasks {
 		if strings.Contains(line, "a3") && hasStatus(line, "active") {
-			t.Fatal("should still be waiting — one blocker remains")
+			t.Fatal("should still be waiting - one blocker remains")
 		}
 	}
 
-	// Complete second blocker — should auto-transition
+	// Complete second blocker - should auto-transition
 	setStatus(store, "A:2", "completed")
 	tasks, _ = GetTasks(store, GetTaskOpts{Depth: -1})
 	found := false
@@ -1197,19 +1201,19 @@ func TestWaitReplacesBlockers(t *testing.T) {
 	// Set wait on s1
 	setWait(store, "T:3", "T:1")
 
-	// Replace with s2 — should only wait on s2 now
+	// Replace with s2 - should only wait on s2 now
 	setWait(store, "T:3", "T:2")
 
-	// Complete s1 — should NOT auto-transition (s2 is the blocker now)
+	// Complete s1 - should NOT auto-transition (s2 is the blocker now)
 	setStatus(store, "T:1", "completed")
 	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
 	for _, line := range tasks {
 		if strings.Contains(line, "s3") && hasStatus(line, "active") {
-			t.Fatal("should still be waiting — blocker was replaced to s2")
+			t.Fatal("should still be waiting - blocker was replaced to s2")
 		}
 	}
 
-	// Complete s2 — NOW should auto-transition
+	// Complete s2 - NOW should auto-transition
 	setStatus(store, "T:2", "completed")
 	tasks, _ = GetTasks(store, GetTaskOpts{Depth: -1})
 	found := false
@@ -1400,7 +1404,7 @@ func TestUnarchive(t *testing.T) {
 
 func TestArchiveCleansUpBlockers(t *testing.T) {
 	store := testStore(t)
-	// Use two named tasks — one blocks the other
+	// Use two named tasks - one blocks the other
 	AddTask(store, "Blocker", "", false, false)
 	AddTask(store, "Waiter", "", false, false)
 
@@ -1408,7 +1412,7 @@ func TestArchiveCleansUpBlockers(t *testing.T) {
 	setStatus(store, "Waiter", "active")
 	setWait(store, "Waiter", "Blocker")
 
-	// Archive the blocker — Waiter should auto-transition to active
+	// Archive the blocker - Waiter should auto-transition to active
 	setStatus(store, "Blocker", "archived")
 
 	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
@@ -1425,7 +1429,7 @@ func TestArchiveCleansUpBlockers(t *testing.T) {
 
 func TestArchivePartialBlockerCleanup(t *testing.T) {
 	store := testStore(t)
-	// Use three named tasks — two block the third
+	// Use three named tasks - two block the third
 	AddTask(store, "B1", "", false, false)
 	AddTask(store, "B2", "", false, false)
 	AddTask(store, "Waiter", "", false, false)
@@ -1435,13 +1439,13 @@ func TestArchivePartialBlockerCleanup(t *testing.T) {
 	setStatus(store, "Waiter", "active")
 	setWait(store, "Waiter", "B1", "B2")
 
-	// Archive only one blocker — Waiter should still be waiting
+	// Archive only one blocker - Waiter should still be waiting
 	setStatus(store, "B1", "archived")
 
 	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
 	for _, line := range tasks {
 		if strings.Contains(line, "Waiter") && hasStatus(line, "active") {
-			t.Fatal("Waiter should still be waiting — one blocker remains")
+			t.Fatal("Waiter should still be waiting - one blocker remains")
 		}
 	}
 }
@@ -1461,7 +1465,7 @@ func TestArchiveParentCleansUpChildBlockers(t *testing.T) {
 	setStatus(store, "another:2", "active")
 	setWait(store, "another:2", "task one:1")
 
-	// Archive "task one" — cascades to "task one:1", should unblock "another:2"
+	// Archive "task one" - cascades to "task one:1", should unblock "another:2"
 	if err := setStatus(store, "task one", "archived"); err != nil {
 		t.Fatalf("archive failed: %v", err)
 	}
@@ -1492,13 +1496,13 @@ func TestArchiveParentPartialChildBlockerCleanup(t *testing.T) {
 	setStatus(store, "waiter", "active")
 	setWait(store, "waiter", "task one:1", "other")
 
-	// Archive "task one" — cascades to "task one:1", but "other" still blocks "waiter"
+	// Archive "task one" - cascades to "task one:1", but "other" still blocks "waiter"
 	setStatus(store, "task one", "archived")
 
 	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
 	for _, line := range tasks {
 		if strings.Contains(line, "waiter") && hasStatus(line, "active") {
-			t.Fatal("waiter should still be waiting — 'other' still blocks it")
+			t.Fatal("waiter should still be waiting - 'other' still blocks it")
 		}
 	}
 	// Verify waiter is still waiting
@@ -1593,7 +1597,7 @@ func TestDeleteCleansUpBlockers(t *testing.T) {
 	setStatus(store, "T:2", "active")
 	setWait(store, "T:2", "T:1")
 
-	// Delete the blocker — s2 should auto-transition to active
+	// Delete the blocker - s2 should auto-transition to active
 	DeleteTaskConfirmed(store, "T:1")
 
 	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
@@ -1620,13 +1624,13 @@ func TestDeletePartialBlockerCleanup(t *testing.T) {
 	setStatus(store, "X:3", "active")
 	setWait(store, "X:3", "X:1", "X:2")
 
-	// Delete only one blocker — x3 should still be waiting
+	// Delete only one blocker - x3 should still be waiting
 	DeleteTaskConfirmed(store, "X:1")
 
 	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
 	for _, line := range tasks {
 		if strings.Contains(line, "x3") && hasStatus(line, "active") {
-			t.Fatal("x3 should still be waiting — one blocker remains")
+			t.Fatal("x3 should still be waiting - one blocker remains")
 		}
 	}
 }
@@ -1669,7 +1673,7 @@ func TestDeleteCrossTaskBlocker(t *testing.T) {
 	setStatus(store, "B:1", "active")
 	setWait(store, "B:1", "A:1")
 
-	// Delete A entirely — b1 should auto-transition to active
+	// Delete A entirely - b1 should auto-transition to active
 	DeleteTaskConfirmed(store, "A")
 
 	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
@@ -1696,7 +1700,7 @@ func TestInheritedTagsOnQueriedTask(t *testing.T) {
 	SetTask(store, "T", SetTaskOpts{SetTags: true, Tags: []string{"URGENT", "BACKEND"}})
 	SetTask(store, "T:1", SetTaskOpts{SetTags: true, Tags: []string{"DESIGN"}})
 
-	// Query the subtask — should show its own tag + parent tags
+	// Query the subtask - should show its own tag + parent tags
 	tasks, _ := GetTasks(store, GetTaskOpts{TaskRef: "T:1", Depth: -1})
 	if !strings.Contains(tasks[0], "#DESIGN") {
 		t.Fatalf("expected own tag #DESIGN: %v", tasks)
@@ -1710,7 +1714,7 @@ func TestInheritedTagsOnQueriedTask(t *testing.T) {
 		t.Fatalf("children should not show inherited tags: %v", tasks)
 	}
 
-	// Deep child — inherits from grandparent too
+	// Deep child - inherits from grandparent too
 	tasks, _ = GetTasks(store, GetTaskOpts{TaskRef: "T:1.1", Depth: -1})
 	if !strings.Contains(tasks[0], "#URGENT") || !strings.Contains(tasks[0], "#BACKEND") || !strings.Contains(tasks[0], "#DESIGN") {
 		t.Fatalf("expected all inherited tags on deep child: %v", tasks)
@@ -1724,7 +1728,7 @@ func TestInheritedTagsNotShownInAllView(t *testing.T) {
 	AddTag(store, "URGENT")
 	SetTask(store, "T", SetTaskOpts{SetTags: true, Tags: []string{"URGENT"}})
 
-	// --all view — child should NOT show parent's tag
+	// --all view - child should NOT show parent's tag
 	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
 	for _, line := range tasks {
 		if strings.Contains(line, "s1") && strings.Contains(line, "#URGENT") {
@@ -1747,7 +1751,7 @@ func TestRulesViaTagsInDetails(t *testing.T) {
 	setRuleTags(store, 1, "BACKEND")
 	setRuleTags(store, 2, "DESIGN")
 
-	// Query subtask with details — should show rules via inherited + own tags
+	// Query subtask with details - should show rules via inherited + own tags
 	tasks, _ := GetTasks(store, GetTaskOpts{TaskRef: "T:1", Details: true, Depth: -1})
 	hasBackendRule := false
 	hasDesignRule := false
@@ -1775,7 +1779,7 @@ func TestRulesNotShownWithoutDetails(t *testing.T) {
 	SetTask(store, "T", SetTaskOpts{SetTags: true, Tags: []string{"BACKEND"}})
 	setRuleTags(store, 1, "BACKEND")
 
-	// Without --details — no rules shown
+	// Without --details - no rules shown
 	tasks, _ := GetTasks(store, GetTaskOpts{TaskRef: "T", Depth: -1})
 	for _, line := range tasks {
 		if strings.Contains(line, "rules:") {
@@ -1790,7 +1794,7 @@ func TestNoRulesWhenNoTagsHaveRules(t *testing.T) {
 	AddTag(store, "MYTAG")
 	SetTask(store, "T", SetTaskOpts{SetTags: true, Tags: []string{"MYTAG"}})
 
-	// Tag has no rules — rules section should not appear
+	// Tag has no rules - rules section should not appear
 	tasks, _ := GetTasks(store, GetTaskOpts{TaskRef: "T", Details: true, Depth: -1})
 	for _, line := range tasks {
 		if strings.Contains(line, "rules:") {
@@ -1813,7 +1817,7 @@ func TestChildOwnTagShowsRules(t *testing.T) {
 	setRuleTags(store, 1, "PARENT")
 	setRuleTags(store, 2, "CHILD")
 
-	// Query parent — should show parent rule, not child rule
+	// Query parent - should show parent rule, not child rule
 	tasks, _ := GetTasks(store, GetTaskOpts{TaskRef: "T", Details: true, Depth: -1})
 	hasParentRule := false
 	hasChildRule := false
@@ -1844,7 +1848,7 @@ func TestChildDoesNotShowParentRules(t *testing.T) {
 
 	// --all --details: child s1 has no direct tags, so no rules should show on it
 	tasks, _ := GetTasks(store, GetTaskOpts{Details: true, Depth: -1})
-	// Find lines after s1 — should not have rules:
+	// Find lines after s1 - should not have rules:
 	foundS1 := false
 	for _, line := range tasks {
 		if strings.Contains(line, "s1") {
@@ -1999,14 +2003,111 @@ func TestSettaskRenameBlockedByDuplicate(t *testing.T) {
 	}
 }
 
-func TestSubtaskDuplicateNameAllowed(t *testing.T) {
+func TestSubtaskDuplicateBlocked(t *testing.T) {
 	store := testStore(t)
 	AddTask(store, "T", "", false, false)
 	AddTask(store, "same", "T", false, false)
-	// Subtasks with same name under same parent are fine (identified by position)
+
 	err := AddTask(store, "same", "T", false, false)
+	if err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("expected duplicate error for subtask, got: %v", err)
+	}
+}
+
+func TestSubtaskDuplicateCaseInsensitive(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	AddTask(store, "Setup", "T", false, false)
+
+	err := AddTask(store, "setup", "T", false, false)
+	if err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("expected case-insensitive duplicate error, got: %v", err)
+	}
+}
+
+func TestSubtaskDuplicateAllowedUnderDifferentParents(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "A", "", false, false)
+	AddTask(store, "B", "", false, false)
+	AddTask(store, "same", "A", false, false)
+
+	err := AddTask(store, "same", "B", false, false)
 	if err != nil {
-		t.Fatalf("subtask duplicate should be allowed: %v", err)
+		t.Fatalf("same name under different parents should be allowed: %v", err)
+	}
+}
+
+func TestSubtaskDuplicateAllowedWhenArchived(t *testing.T) {
+	store := testStore(t)
+	// Create T with a child, then force-recreate T (archives old T and its children)
+	AddTask(store, "T", "", false, false)
+	AddTask(store, "child", "T", false, false)
+	AddTask(store, "T", "", false, true) // force archives old T + its children
+
+	// Adding "child" under new T should succeed since old "child" is archived
+	err := AddTask(store, "child", "T", false, false)
+	if err != nil {
+		t.Fatalf("archived subtask should not block: %v", err)
+	}
+}
+
+func TestSubtaskDuplicateForceArchivesExisting(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	AddTask(store, "child", "T", false, false)
+
+	err := AddTask(store, "child", "T", false, true)
+	if err != nil {
+		t.Fatalf("force should succeed: %v", err)
+	}
+
+	tasks, _ := GetTasks(store, GetTaskOpts{TaskRef: "T", Depth: -1})
+	combined := strings.Join(tasks, "\n")
+	// Should have one visible child, not two
+	count := strings.Count(combined, "child")
+	if count != 1 {
+		t.Fatalf("expected 1 visible 'child', got %d in:\n%s", count, combined)
+	}
+}
+
+func TestSubtaskDuplicateCrossParallelSequential(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	AddTask(store, "Setup", "T", false, false) // sequential: 1. Setup
+
+	// Adding parallel with same name should be blocked
+	err := AddTask(store, "Setup", "T", true, false)
+	if err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("expected cross-type duplicate error, got: %v", err)
+	}
+}
+
+func TestSettaskRenameSubtaskBlockedByDuplicate(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	AddTask(store, "alpha", "T", false, false)
+	AddTask(store, "beta", "T", false, false)
+
+	name := "alpha"
+	err := SetTask(store, "T:2", SetTaskOpts{Name: &name})
+	if err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("expected duplicate error on subtask rename, got: %v", err)
+	}
+
+	// Force rename archives the conflicting sibling
+	err = SetTask(store, "T:2", SetTaskOpts{Name: &name, Force: true})
+	if err != nil {
+		t.Fatalf("force rename should succeed: %v", err)
+	}
+}
+
+func TestRootDuplicateCaseInsensitive(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "MyTask", "", false, false)
+
+	err := AddTask(store, "mytask", "", false, false)
+	if err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("expected case-insensitive duplicate error for root, got: %v", err)
 	}
 }
 
@@ -2039,5 +2140,762 @@ func TestMaxTaskNameLen(t *testing.T) {
 	err = AddTask(store, exactName, "", false, false)
 	if err != nil {
 		t.Fatalf("name at exactly maxTaskNameLen should be allowed: %v", err)
+	}
+}
+
+func TestGetTaskFilterByMultipleTags(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T1", "", false, false)
+	AddTask(store, "T2", "", false, false)
+	AddTask(store, "T3", "", false, false)
+	AddTag(store, "URGENT")
+	AddTag(store, "BACKEND")
+	AddTag(store, "INFRA")
+
+	SetTask(store, "T1", SetTaskOpts{SetTags: true, Tags: []string{"URGENT", "BACKEND"}})
+	SetTask(store, "T2", SetTaskOpts{SetTags: true, Tags: []string{"URGENT", "INFRA"}})
+	SetTask(store, "T3", SetTaskOpts{SetTags: true, Tags: []string{"BACKEND"}})
+
+	tasks, err := GetTasks(store, GetTaskOpts{Tags: []string{"URGENT", "BACKEND"}, Depth: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task with URGENT+BACKEND, got %d: %v", len(tasks), tasks)
+	}
+	if !strings.Contains(tasks[0], "T1") {
+		t.Fatalf("expected T1, got: %v", tasks)
+	}
+}
+
+func TestGetTaskFilterByNotTag(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T1", "", false, false)
+	AddTask(store, "T2", "", false, false)
+	AddTask(store, "T3", "", false, false)
+	AddTag(store, "URGENT")
+	AddTag(store, "BACKEND")
+
+	SetTask(store, "T1", SetTaskOpts{SetTags: true, Tags: []string{"URGENT"}})
+	SetTask(store, "T2", SetTaskOpts{SetTags: true, Tags: []string{"URGENT", "BACKEND"}})
+	SetTask(store, "T3", SetTaskOpts{SetTags: true, Tags: []string{"BACKEND"}})
+
+	tasks, err := GetTasks(store, GetTaskOpts{NotTags: []string{"URGENT"}, Depth: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 non-urgent task, got %d: %v", len(tasks), tasks)
+	}
+	if !strings.Contains(tasks[0], "T3") {
+		t.Fatalf("expected T3, got: %v", tasks)
+	}
+}
+
+func TestGetTaskFilterByMultipleNotTags(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T1", "", false, false)
+	AddTask(store, "T2", "", false, false)
+	AddTask(store, "T3", "", false, false)
+	AddTask(store, "T4", "", false, false)
+	AddTag(store, "URGENT")
+	AddTag(store, "BACKEND")
+
+	SetTask(store, "T1", SetTaskOpts{SetTags: true, Tags: []string{"URGENT"}})
+	SetTask(store, "T2", SetTaskOpts{SetTags: true, Tags: []string{"BACKEND"}})
+	SetTask(store, "T3", SetTaskOpts{SetTags: true, Tags: []string{"URGENT", "BACKEND"}})
+
+	tasks, err := GetTasks(store, GetTaskOpts{NotTags: []string{"URGENT", "BACKEND"}, Depth: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task with neither tag, got %d: %v", len(tasks), tasks)
+	}
+	if !strings.Contains(tasks[0], "T4") {
+		t.Fatalf("expected T4, got: %v", tasks)
+	}
+}
+
+func TestGetTaskFilterByTagAndNotTag(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T1", "", false, false)
+	AddTask(store, "T2", "", false, false)
+	AddTask(store, "T3", "", false, false)
+	AddTag(store, "URGENT")
+	AddTag(store, "BACKEND")
+
+	SetTask(store, "T1", SetTaskOpts{SetTags: true, Tags: []string{"URGENT", "BACKEND"}})
+	SetTask(store, "T2", SetTaskOpts{SetTags: true, Tags: []string{"URGENT"}})
+	SetTask(store, "T3", SetTaskOpts{SetTags: true, Tags: []string{"BACKEND"}})
+
+	tasks, err := GetTasks(store, GetTaskOpts{Tags: []string{"URGENT"}, NotTags: []string{"BACKEND"}, Depth: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d: %v", len(tasks), tasks)
+	}
+	if !strings.Contains(tasks[0], "T2") {
+		t.Fatalf("expected T2, got: %v", tasks)
+	}
+}
+
+func TestGetTaskFilterNotTagNone(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "Tagged", "", false, false)
+	AddTask(store, "Untagged", "", false, false)
+	AddTag(store, "X")
+	SetTask(store, "Tagged", SetTaskOpts{SetTags: true, Tags: []string{"X"}})
+
+	tasks, err := GetTasks(store, GetTaskOpts{NotTags: []string{"NONE"}, Depth: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 tagged task, got %d: %v", len(tasks), tasks)
+	}
+	if !strings.Contains(tasks[0], "Tagged") {
+		t.Fatalf("expected Tagged, got: %v", tasks)
+	}
+}
+
+func TestGetTaskFilterNotTagInheritance(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "Parent", "", false, false)
+	AddTask(store, "child", "Parent", false, false)
+	AddTask(store, "Other", "", false, false)
+	AddTag(store, "X")
+	SetTask(store, "Parent", SetTaskOpts{SetTags: true, Tags: []string{"X"}})
+
+	// Parent has X, child inherits X -- both excluded
+	tasks, err := GetTasks(store, GetTaskOpts{NotTags: []string{"X"}, Depth: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d: %v", len(tasks), tasks)
+	}
+	if !strings.Contains(tasks[0], "Other") {
+		t.Fatalf("expected Other, got: %v", tasks)
+	}
+}
+
+func TestGetTaskFilterNotTagChildDirectlyTagged(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "Parent", "", false, false)
+	AddTask(store, "child", "Parent", false, false)
+	AddTask(store, "Other", "", false, false)
+	AddTag(store, "X")
+	// Parent has NO tags, but child is directly tagged X
+	SetTask(store, "Parent:1", SetTaskOpts{SetTags: true, Tags: []string{"X"}})
+
+	// Exclude X -- child has X directly, parent does not
+	// Parent and Other should show, child should NOT
+	tasks, err := GetTasks(store, GetTaskOpts{NotTags: []string{"X"}, Depth: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range tasks {
+		if strings.Contains(line, "child") {
+			t.Fatalf("child with direct tag X should be excluded by nottag: %v", tasks)
+		}
+	}
+	found := 0
+	for _, line := range tasks {
+		if strings.Contains(line, "Parent") || strings.Contains(line, "Other") {
+			found++
+		}
+	}
+	if found != 2 {
+		t.Fatalf("expected Parent and Other, got: %v", tasks)
+	}
+}
+
+func TestGetTaskFilterNotTagWithStatusCombo(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T1", "", false, false)
+	AddTask(store, "T2", "", false, false)
+	AddTask(store, "T3", "", false, false)
+	AddTag(store, "DONE")
+
+	SetTask(store, "T1", SetTaskOpts{SetTags: true, Tags: []string{"DONE"}})
+	setStatus(store, "T1", "active")
+	setStatus(store, "T2", "active")
+
+	tasks, err := GetTasks(store, GetTaskOpts{NotTags: []string{"DONE"}, Status: "active", Depth: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d: %v", len(tasks), tasks)
+	}
+	if !strings.Contains(tasks[0], "T2") {
+		t.Fatalf("expected T2, got: %v", tasks)
+	}
+}
+
+func TestGetTaskFilterByNonexistentTagErrors(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T1", "", false, false)
+	AddTag(store, "REAL")
+
+	// Filtering by a tag that doesn't exist should error
+	_, err := GetTasks(store, GetTaskOpts{Tags: []string{"NOPE"}, Depth: -1})
+	if err == nil {
+		t.Fatal("expected error for nonexistent tag")
+	}
+	if !strings.Contains(err.Error(), "NOPE") {
+		t.Fatalf("error should mention the tag name: %v", err)
+	}
+
+	// Same for nottag
+	_, err = GetTasks(store, GetTaskOpts{NotTags: []string{"NOPE"}, Depth: -1})
+	if err == nil {
+		t.Fatal("expected error for nonexistent nottag")
+	}
+
+	// NONE should not be checked for existence
+	_, err = GetTasks(store, GetTaskOpts{Tags: []string{"NONE"}, Depth: -1})
+	if err != nil {
+		t.Fatalf("NONE should not require existence check: %v", err)
+	}
+
+	// Real tag should work fine
+	_, err = GetTasks(store, GetTaskOpts{Tags: []string{"REAL"}, Depth: -1})
+	if err != nil {
+		t.Fatalf("existing tag should work: %v", err)
+	}
+}
+
+func TestGetTaskFilterByCommaSeparatedTags(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T1", "", false, false)
+	AddTask(store, "T2", "", false, false)
+	AddTask(store, "T3", "", false, false)
+	AddTag(store, "URGENT")
+	AddTag(store, "BACKEND")
+
+	SetTask(store, "T1", SetTaskOpts{SetTags: true, Tags: []string{"URGENT", "BACKEND"}})
+	SetTask(store, "T2", SetTaskOpts{SetTags: true, Tags: []string{"URGENT"}})
+	SetTask(store, "T3", SetTaskOpts{SetTags: true, Tags: []string{"BACKEND"}})
+
+	// Simulate CLI passing "URGENT,BACKEND" as a single element (comma-separated)
+	tasks, err := GetTasks(store, GetTaskOpts{Tags: []string{"URGENT,BACKEND"}, Depth: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task with both tags via comma input, got %d: %v", len(tasks), tasks)
+	}
+	if !strings.Contains(tasks[0], "T1") {
+		t.Fatalf("expected T1, got: %v", tasks)
+	}
+
+	// Same for nottag: "URGENT,BACKEND" as single element excludes tasks with either
+	tasks, err = GetTasks(store, GetTaskOpts{NotTags: []string{"URGENT,BACKEND"}, Depth: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// T1 has both, T2 has URGENT, T3 has BACKEND -- all excluded
+	if len(tasks) != 0 {
+		t.Fatalf("expected 0 tasks, got %d: %v", len(tasks), tasks)
+	}
+}
+
+func TestGetTaskFilterNotTagDeepNesting(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "Grandparent", "", false, false)
+	AddTask(store, "Parent", "Grandparent", false, false)
+	AddTask(store, "Child", "Grandparent:1", false, false)
+	AddTask(store, "Other", "", false, false)
+	AddTag(store, "X")
+	AddTag(store, "Y")
+
+	// Tag grandparent with X
+	SetTask(store, "Grandparent", SetTaskOpts{SetTags: true, Tags: []string{"X"}})
+
+	// --nottag X should exclude grandparent, parent (inherits X), and child (inherits X)
+	tasks, err := GetTasks(store, GetTaskOpts{NotTags: []string{"X"}, Depth: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d: %v", len(tasks), tasks)
+	}
+	if !strings.Contains(tasks[0], "Other") {
+		t.Fatalf("expected Other, got: %v", tasks)
+	}
+
+	// Now also tag child directly with Y
+	SetTask(store, "Grandparent:1.1", SetTaskOpts{SetTags: true, Tags: []string{"Y"}})
+
+	// --tag X --nottag Y: grandparent has X (match), parent inherits X (match),
+	// child inherits X (match) BUT also has Y (excluded)
+	tasks, err = GetTasks(store, GetTaskOpts{Tags: []string{"X"}, NotTags: []string{"Y"}, Depth: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Grandparent and Parent should show, Child should not
+	for _, line := range tasks {
+		if strings.Contains(line, "Child") {
+			t.Fatalf("Child has tag Y and should be excluded: %v", tasks)
+		}
+	}
+	found := 0
+	for _, line := range tasks {
+		if strings.Contains(line, "Grandparent") || strings.Contains(line, "Parent") {
+			found++
+		}
+	}
+	if found < 2 {
+		t.Fatalf("expected Grandparent and Parent, got: %v", tasks)
+	}
+}
+
+func TestVerifyStatusDefaultEmpty(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+
+	tasks, _ := GetTasks(store, GetTaskOpts{Details: true, Depth: -1})
+	for _, line := range tasks {
+		if strings.Contains(line, "verify status:") {
+			t.Fatalf("verify status should not appear when empty: %v", tasks)
+		}
+	}
+}
+
+func TestVerifyPendingBadge(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{Verify: strPtr("check output")})
+
+	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
+	found := false
+	for _, line := range tasks {
+		if strings.Contains(line, "[verify: pending]") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected [verify: pending] badge: %v", tasks)
+	}
+}
+
+func TestVerifyPassedBadge(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{Verify: strPtr("check output")})
+	passed := "passed"
+	SetTask(store, "T", SetTaskOpts{VerifyStatus: &passed})
+
+	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
+	found := false
+	for _, line := range tasks {
+		if strings.Contains(line, "[verify: passed]") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected [verify: passed] badge: %v", tasks)
+	}
+}
+
+func TestVerifyAutoSetsPending(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{Status: "active"})
+	SetTask(store, "T", SetTaskOpts{Verify: strPtr("check output")})
+
+	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
+	found := false
+	for _, line := range tasks {
+		if strings.Contains(line, "[verify: pending]") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected [verify: pending] after setting criteria: %v", tasks)
+	}
+}
+
+func TestVerifyBlocksCompletion(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{Status: "active"})
+	SetTask(store, "T", SetTaskOpts{Verify: strPtr("check output")})
+
+	err := SetTask(store, "T", SetTaskOpts{Status: "completed"})
+	if err == nil {
+		t.Fatal("expected error when completing task with pending verification")
+	}
+	if !strings.Contains(err.Error(), "verification not passed") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestVerifyPassedAllowsCompletion(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{Status: "active"})
+	SetTask(store, "T", SetTaskOpts{Verify: strPtr("check output")})
+
+	passed := "passed"
+	SetTask(store, "T", SetTaskOpts{VerifyStatus: &passed})
+
+	err := SetTask(store, "T", SetTaskOpts{Status: "completed"})
+	if err != nil {
+		t.Fatalf("expected completion to succeed after passing verification: %v", err)
+	}
+}
+
+func TestVerifyStatusResetOnNewCriteria(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{Status: "active"})
+	SetTask(store, "T", SetTaskOpts{Verify: strPtr("check A")})
+
+	passed := "passed"
+	SetTask(store, "T", SetTaskOpts{VerifyStatus: &passed})
+	SetTask(store, "T", SetTaskOpts{Verify: strPtr("check B")})
+
+	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
+	found := false
+	for _, line := range tasks {
+		if strings.Contains(line, "[verify: pending]") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected pending after setting new criteria: %v", tasks)
+	}
+}
+
+func TestVerifyClearWithNone(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{Status: "active"})
+	SetTask(store, "T", SetTaskOpts{Verify: strPtr("check output")})
+
+	none := "none"
+	SetTask(store, "T", SetTaskOpts{Verify: &none})
+
+	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
+	for _, line := range tasks {
+		if strings.Contains(line, "verify") {
+			t.Fatalf("expected no verify after clearing: %v", tasks)
+		}
+	}
+
+	err := SetTask(store, "T", SetTaskOpts{Status: "completed"})
+	if err != nil {
+		t.Fatalf("expected completion after clearing verify: %v", err)
+	}
+}
+
+func TestVerifyClearCaseInsensitive(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{Status: "active"})
+	SetTask(store, "T", SetTaskOpts{Verify: strPtr("check output")})
+
+	none := "NONE"
+	SetTask(store, "T", SetTaskOpts{Verify: &none})
+
+	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
+	for _, line := range tasks {
+		if strings.Contains(line, "verify") {
+			t.Fatalf("expected no verify after clearing with NONE: %v", tasks)
+		}
+	}
+}
+
+func TestVerifyStatusWithoutCriteriaErrors(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{Status: "active"})
+
+	passed := "passed"
+	err := SetTask(store, "T", SetTaskOpts{VerifyStatus: &passed})
+	if err == nil {
+		t.Fatal("expected error when setting verify status without criteria")
+	}
+	if !strings.Contains(err.Error(), "no verification criteria") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestVerifyResetOnReopen(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{Status: "active"})
+	SetTask(store, "T", SetTaskOpts{Verify: strPtr("check output")})
+
+	passed := "passed"
+	SetTask(store, "T", SetTaskOpts{VerifyStatus: &passed})
+	SetTask(store, "T", SetTaskOpts{Status: "completed"})
+	SetTask(store, "T", SetTaskOpts{Status: "reopened"})
+
+	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
+	found := false
+	for _, line := range tasks {
+		if strings.Contains(line, "[verify: pending]") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected pending after reopen: %v", tasks)
+	}
+}
+
+func TestNoVerifyGateWithoutCriteria(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{Status: "active"})
+
+	err := SetTask(store, "T", SetTaskOpts{Status: "completed"})
+	if err != nil {
+		t.Fatalf("tasks without verify criteria should complete freely: %v", err)
+	}
+}
+
+func TestVerifyStatusPendingRevert(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{Status: "active"})
+	SetTask(store, "T", SetTaskOpts{Verify: strPtr("check output")})
+
+	passed := "passed"
+	SetTask(store, "T", SetTaskOpts{VerifyStatus: &passed})
+	pending := "pending"
+	SetTask(store, "T", SetTaskOpts{VerifyStatus: &pending})
+
+	err := SetTask(store, "T", SetTaskOpts{Status: "completed"})
+	if err == nil {
+		t.Fatal("expected completion blocked after reverting to pending")
+	}
+}
+
+func TestVerifyStatusExportImport(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{Status: "active"})
+	SetTask(store, "T", SetTaskOpts{Verify: strPtr("check output")})
+	passed := "passed"
+	SetTask(store, "T", SetTaskOpts{VerifyStatus: &passed})
+
+	// Export
+	data, err := Export(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data.Tasks[0].VerifyStatus != "passed" {
+		t.Fatalf("expected passed in export, got: %s", data.Tasks[0].VerifyStatus)
+	}
+
+	// Import into fresh store
+	store2 := testStore(t)
+	if err := Import(store2, data, false); err != nil {
+		t.Fatal(err)
+	}
+	tasks, _ := GetTasks(store2, GetTaskOpts{Depth: -1})
+	found := false
+	for _, line := range tasks {
+		if strings.Contains(line, "[verify: passed]") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected [verify: passed] after import: %v", tasks)
+	}
+}
+
+func TestVerifyStatusImportOldExport(t *testing.T) {
+	store := testStore(t)
+	data := &ExportData{
+		Version: 1,
+		Tasks: []ExportTask{
+			{
+				Name:            "T",
+				Status:          "active",
+				Verification:    "check output",
+				VerifyStatus:    "",
+				CreatedAt:       "2026-01-01T00:00:00Z",
+				StatusChangedAt: "2026-01-01T00:00:00Z",
+			},
+		},
+	}
+	if err := Import(store, data, false); err != nil {
+		t.Fatal(err)
+	}
+
+	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
+	found := false
+	for _, line := range tasks {
+		if strings.Contains(line, "[verify: pending]") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected [verify: pending] for old export with criteria: %v", tasks)
+	}
+}
+
+func TestVerifyStatusInDetails(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{Verify: strPtr("check output")})
+
+	tasks, _ := GetTasks(store, GetTaskOpts{Details: true, Depth: -1})
+	hasVerify := false
+	hasStatus := false
+	for _, line := range tasks {
+		if strings.Contains(line, "verify: check output") {
+			hasVerify = true
+		}
+		if strings.Contains(line, "verify status: pending") {
+			hasStatus = true
+		}
+	}
+	if !hasVerify {
+		t.Fatalf("expected verify criteria in details: %v", tasks)
+	}
+	if !hasStatus {
+		t.Fatalf("expected verify status in details: %v", tasks)
+	}
+}
+
+func TestClearVerifyOnCompletedTask(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{Status: "active"})
+	SetTask(store, "T", SetTaskOpts{Verify: strPtr("check output")})
+
+	passed := "passed"
+	SetTask(store, "T", SetTaskOpts{VerifyStatus: &passed})
+	SetTask(store, "T", SetTaskOpts{Status: "completed"})
+
+	// Clear verify on completed task - should be allowed
+	none := "none"
+	err := SetTask(store, "T", SetTaskOpts{Verify: &none})
+	if err != nil {
+		t.Fatalf("clearing verify on completed task should be allowed: %v", err)
+	}
+
+	// Task should still be completed
+	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
+	if !hasStatus(tasks[0], "completed") {
+		t.Fatalf("task should still be completed: %v", tasks)
+	}
+	for _, line := range tasks {
+		if strings.Contains(line, "verify") {
+			t.Fatalf("verify should be cleared: %v", tasks)
+		}
+	}
+}
+
+func TestRecurResetsVerifyStatus(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+
+	rc := "daily"
+	SetTask(store, "T", SetTaskOpts{Recur: &rc})
+	SetTask(store, "T", SetTaskOpts{Status: "active"})
+	SetTask(store, "T", SetTaskOpts{Verify: strPtr("check output")})
+
+	passed := "passed"
+	SetTask(store, "T", SetTaskOpts{VerifyStatus: &passed})
+	SetTask(store, "T", SetTaskOpts{Status: "completed"})
+
+	// Backdate so recurrence fires
+	store.WriteTx(func(tx *sql.Tx) error {
+		_, err := tx.Exec("UPDATE tasks SET status_changed_at = datetime('now', '-2 days') WHERE name = 'T'")
+		return err
+	})
+
+	ActivateRecurring(store)
+
+	// Task should be active again with verify reset to pending
+	tasks, _ := GetTasks(store, GetTaskOpts{Depth: -1})
+	if !hasStatus(tasks[0], "active") {
+		t.Fatalf("expected reactivated: %v", tasks)
+	}
+	found := false
+	for _, line := range tasks {
+		if strings.Contains(line, "[verify: pending]") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected verify reset to pending after recurrence: %v", tasks)
+	}
+
+	// Should block completion again
+	err := SetTask(store, "T", SetTaskOpts{Status: "completed"})
+	if err == nil {
+		t.Fatal("expected completion blocked after recurrence reset")
+	}
+}
+
+func TestVerifyCombinedFlagsRejected(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{Status: "active"})
+
+	// Setting both --verify and --verify-status in one call should be rejected
+	passed := "passed"
+	err := SetTask(store, "T", SetTaskOpts{Verify: strPtr("check output"), VerifyStatus: &passed})
+	if err == nil {
+		t.Fatal("expected error when setting both --verify and --verify-status")
+	}
+	if !strings.Contains(err.Error(), "cannot set --verify and --verify-status in the same call") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestVerifyInvalidStatusRejected(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{Status: "active"})
+	SetTask(store, "T", SetTaskOpts{Verify: strPtr("check output")})
+
+	garbage := "garbage"
+	err := SetTask(store, "T", SetTaskOpts{VerifyStatus: &garbage})
+	if err == nil {
+		t.Fatal("expected error for invalid verify status")
+	}
+	if !strings.Contains(err.Error(), "invalid verify status") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCancelWithPendingVerification(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{Status: "active"})
+	SetTask(store, "T", SetTaskOpts{Verify: strPtr("check output")})
+
+	// Cancel should work even with pending verification - gate only blocks completion
+	err := SetTask(store, "T", SetTaskOpts{Status: "cancelled"})
+	if err != nil {
+		t.Fatalf("cancelling with pending verification should be allowed: %v", err)
+	}
+}
+
+func TestCorruptedVerifyStatusBlocksCompletion(t *testing.T) {
+	store := testStore(t)
+	AddTask(store, "T", "", false, false)
+	SetTask(store, "T", SetTaskOpts{Status: "active"})
+	SetTask(store, "T", SetTaskOpts{Verify: strPtr("check output")})
+
+	// Simulate corruption by writing garbage directly to DB
+	store.WriteTx(func(tx *sql.Tx) error {
+		_, err := tx.Exec("UPDATE tasks SET verify_status = 'pendng' WHERE name = 'T'")
+		return err
+	})
+
+	err := SetTask(store, "T", SetTaskOpts{Status: "completed"})
+	if err == nil {
+		t.Fatal("corrupted verify_status should still block completion")
 	}
 }

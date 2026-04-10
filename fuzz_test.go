@@ -89,7 +89,7 @@ func FuzzParseRecur(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, input string) {
-		// Must not panic — either returns a valid pattern or an error
+		// Must not panic - either returns a valid pattern or an error
 		_, err := parseRecur(input)
 		_ = err
 	})
@@ -127,7 +127,7 @@ func FuzzParseDeadline(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, input string) {
-		// Must not panic — either returns a valid deadline or an error
+		// Must not panic - either returns a valid deadline or an error
 		result, err := parseDeadline(input)
 		if err == nil && result == "" {
 			t.Errorf("parseDeadline(%q) returned empty result with no error", input)

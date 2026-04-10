@@ -6,7 +6,7 @@ import (
 )
 
 func printHelp() {
-	fmt.Println(`Butler — CLI + MCP task and rule manager
+	fmt.Println(`Butler - CLI + MCP task and rule manager
 
 Tasks
   addtask      Create a task or subtask
@@ -48,7 +48,7 @@ func printCommandHelp(cmd string) {
 }
 
 var commandHelp = map[string]string{
-	"addtask": `addtask — Create a task or subtask
+	"addtask": `addtask - Create a task or subtask
 
 Usage:
   butler addtask "task name" [--under "task:pos"] [--parallel] [--force] [--tag TAG1 TAG2]
@@ -71,20 +71,22 @@ Why use addtask:
   Tasks are the core unit of work. Top-level tasks are identified by name, subtasks
   by position path (e.g. "Email boss:1.a"). Sequential subtasks imply order (do 1 then
   2), parallel subtasks can be done in any order. Use --under to build hierarchies.
-  Blocks if a non-archived root task with the same name exists — use --force to
+  Blocks if a non-archived root task with the same name exists - use --force to
   archive the old one and start fresh.`,
 
-	"settask": `settask — Update a task's name, status, description, tags, deadline, or recurrence
+	"settask": `settask - Update a task's name, status, description, tags, deadline, or recurrence
 
 Usage:
   butler settask "task:pos" ["new name"] [--status STATUS] [--desc "text"]
-    [--verify "criteria"] [--deadline DATE] [--recur PATTERN] [--tag TAG1 TAG2] [--force]
+    [--verify "criteria"] [--verify-status STATUS] [--deadline DATE] [--recur PATTERN]
+    [--tag TAG1 TAG2] [--force]
 
 Flags:
-  --status STATUS      Set status (see values below)
-  --desc "text"        Set or update description
-  --verify "criteria"  Set verification criteria
-  --deadline DATE      Set deadline (YYYY-MM-DD or "YYYY-MM-DD HH:MM"), "none" to clear
+  --status STATUS        Set status (see values below)
+  --desc "text"          Set or update description
+  --verify "criteria"    Set verification criteria (auto-sets verify status to pending), "none" to clear
+  --verify-status STATUS Set verification status: 'passed' or 'pending'
+  --deadline DATE        Set deadline (YYYY-MM-DD or "YYYY-MM-DD HH:MM"), "none" to clear
   --recur PATTERN      Set recurrence (see patterns below), "none" to clear
   --tag TAG1 TAG2      Replace all tags with the given tags
   --force              When renaming, archive any conflicting non-archived task
@@ -92,11 +94,11 @@ Flags:
 Status values:
   active       Start working on it
   deferred     Postpone it (children inherit deferred display)
-  completed    Mark done (requires all children complete/cancelled)
+  completed    Mark done (requires all children complete/cancelled and verification passed)
   reopened     Reopen a completed task
   cancelled    Cancel it (children inherit cancelled display)
   archived     Archive task and all children (top-level only)
-  wait         Set to waiting with blockers: --status wait "blocker:pos" "other"
+  wait         Set to waiting: --status wait --blockers "blocker:pos" "other"
 
 Recurrence patterns:
   daily              Every day
@@ -108,7 +110,7 @@ Recurrence patterns:
 Examples:
   butler settask "Email boss" --status active
   butler settask "Email boss:1" --status completed
-  butler settask "Email boss:2" --status wait "Email boss:1"
+  butler settask "Email boss:2" --status wait --blockers "Email boss:1"
   butler settask "Email boss" --desc "Send the quarterly report"
   butler settask "Email boss" --deadline "2026-04-15 14:00"
   butler settask "Email boss" --recur "weekly mon"
@@ -119,19 +121,20 @@ Examples:
 Why use settask:
   This is the Swiss Army knife for task updates. Combine multiple flags in one call.
   Status transitions are validated (e.g. can't complete a task with incomplete children).
-  Setting status to "wait" requires blocker refs — the task auto-activates when all
+  Setting status to "wait" requires --blockers with task refs - the task auto-activates when all
   blockers complete. Archived status cascades to all children and cleans up blockers.`,
 
-	"gettask": `gettask — View tasks with hierarchy, statuses, and filters
+	"gettask": `gettask -- View tasks with hierarchy, statuses, and filters
 
 Usage:
-  butler gettask --all [--status STATUS] [--tag TAG] [--depth N] [--sort FIELD] [--details]
-  butler gettask "task:pos" [--depth N] [--details]
+  butler gettask --all [--status STATUS] [--tag TAG1 TAG2] [--nottag TAG1 TAG2] [--depth N] [--sort FIELD] [--details]
+  butler gettask "task:pos" [--status STATUS] [--tag TAG1 TAG2] [--nottag TAG1 TAG2] [--depth N] [--details]
 
 Flags:
   --all              Show all tasks (required when not specifying a task ref)
   --status STATUS    Filter by status (active, completed, archived, etc.)
-  --tag TAG          Filter by tag name, "NONE" for untagged tasks
+  --tag TAG1 TAG2    Filter by tags (AND: must match all). Accepts multiple space-separated values.
+  --nottag TAG1 TAG2 Exclude by tags (must match none). Accepts multiple space-separated values.
   --depth N          Limit subtask depth (0 = task only, 1 = direct children, etc.)
   --sort recent      Sort by most recently changed
   --sort deadline    Sort by deadline (earliest first, no-deadline last)
@@ -143,6 +146,8 @@ Examples:
   butler gettask "Email boss:1"                        Specific subtask
   butler gettask --all --status active                 Only active tasks
   butler gettask --all --tag URGENT                    Only tasks tagged URGENT
+  butler gettask --all --tag URGENT WORK               Tasks with both URGENT and WORK tags
+  butler gettask --all --nottag ARCHIVED               Exclude tasks tagged ARCHIVED
   butler gettask --all --sort deadline                 Sorted by deadline
   butler gettask "Email boss" --details                Full details with rules
 
@@ -152,7 +157,7 @@ Why use gettask:
   hidden unless you filter with --status archived. Use --details for the full picture
   including descriptions, verification criteria, and rules linked through tags.`,
 
-	"deletetask": `deletetask — Permanently delete a task and all its children
+	"deletetask": `deletetask - Permanently delete a task and all its children
 
 Usage:
   butler deletetask "task:pos" [--force]
@@ -165,12 +170,12 @@ Examples:
   butler deletetask "Email boss:1" --force  Delete subtask without confirmation
 
 Why use deletetask:
-  Permanent deletion — removes the task, all its children, all blocker references,
+  Permanent deletion - removes the task, all its children, all blocker references,
   and all tag assignments. Waiting tasks that lose their last blocker auto-activate.
   Prefer archiving (settask --status archived) if you might want to see the task
   again. Use deletetask when you want it truly gone.`,
 
-	"addrule": `addrule — Create a rule
+	"addrule": `addrule - Create a rule
 
 Usage:
   butler addrule "rule text" [--tag TAG1 TAG2]
@@ -184,11 +189,11 @@ Examples:
 
 Why use addrule:
   Rules are guidelines or constraints attached to your workflow. Tag rules to associate
-  them with tasks — when viewing a task with --details, rules linked through shared
+  them with tasks - when viewing a task with --details, rules linked through shared
   tags are shown. Rules are numbered sequentially. Deleted rule slots are reused by
   the next addrule call.`,
 
-	"setrule": `setrule — Update a rule's name or tags
+	"setrule": `setrule - Update a rule's name or tags
 
 Usage:
   butler setrule SEQ ["new name"] [--tag TAG1 TAG2]
@@ -205,18 +210,19 @@ Why use setrule:
   Update an existing rule's text or change which tags it's associated with. Tag
   changes automatically update the ruletag flag on the affected tags.`,
 
-	"getrule": `getrule — View rules with optional filters
+	"getrule": `getrule - View rules with optional filters
 
 Usage:
-  butler getrule [SEQ] [--tag TAG] [--tag-all]
+  butler getrule --all | butler getrule SEQ | butler getrule --tag TAG | butler getrule --tag-all
 
 Flags:
+  --all        Show all rules
   SEQ          Show a specific rule by number
   --tag TAG    Filter rules by tag, "NONE" for untagged rules
   --tag-all    Group all rules by their tags
 
 Examples:
-  butler getrule                  All rules in order
+  butler getrule --all              All rules in order
   butler getrule 1                Specific rule by number
   butler getrule --tag BACKEND    Rules tagged BACKEND
   butler getrule --tag NONE       Untagged rules
@@ -227,7 +233,7 @@ Why use getrule:
   apply to which areas. Rules tagged with the same tags as a task will appear in
   that task's --details view.`,
 
-	"deleterule": `deleterule — Delete a rule by number
+	"deleterule": `deleterule - Delete a rule by number
 
 Usage:
   butler deleterule SEQ [--force]
@@ -243,7 +249,7 @@ Why use deleterule:
   Soft-deletes the rule by clearing its name and tags. The slot number is reused by
   the next addrule call, keeping rule numbers compact.`,
 
-	"addtag": `addtag — Create a tag
+	"addtag": `addtag - Create a tag
 
 Usage:
   butler addtag TAG
@@ -263,7 +269,7 @@ Why use addtag:
   in its --details view. Tags must be created before they can be assigned. Subtasks
   inherit their parent's tags for display and filtering purposes.`,
 
-	"settag": `settag — Rename a tag
+	"settag": `settag - Rename a tag
 
 Usage:
   butler settag OLD NEW
@@ -272,23 +278,27 @@ Examples:
   butler settag BACKEND API
 
 Why use settag:
-  Renames a tag everywhere — all task and rule associations follow automatically.
+  Renames a tag everywhere - all task and rule associations follow automatically.
   The new name must follow the same rules (uppercase alphanumeric, 10 chars max).`,
 
-	"gettag": `gettag — View tags and their usage
+	"gettag": `gettag - View tags and their usage
 
 Usage:
-  butler gettag [TAG]
+  butler gettag --all | butler gettag TAG
+
+Flags:
+  --all        Show all tags
+  TAG          Show tasks and rules using a specific tag
 
 Examples:
-  butler gettag              All tags with task/rule counts
+  butler gettag --all        All tags with task/rule counts
   butler gettag BACKEND      Tasks and rules using BACKEND
 
 Why use gettag:
-  Without an argument, shows all tags with counts of how many tasks and rules use
-  each. With a tag name, shows the specific tasks and rules using that tag.`,
+  Use --all to see all tags with counts of how many tasks and rules use each.
+  With a tag name, shows the specific tasks and rules using that tag.`,
 
-	"deletetag": `deletetag — Permanently delete a tag
+	"deletetag": `deletetag - Permanently delete a tag
 
 Usage:
   butler deletetag TAG [--force]
@@ -305,7 +315,7 @@ Why use deletetag:
   linked through this tag will no longer see those rules in --details. This is
   permanent.`,
 
-	"export": `export — Export all tasks, rules, and tags to JSON
+	"export": `export - Export all tasks, rules, and tags to JSON
 
 Usage:
   butler export [file.json]
@@ -323,7 +333,7 @@ Why use export:
   all statuses, tags, rules, blockers, deadlines, and recurrence patterns.
   Use with import to restore or migrate data.`,
 
-	"import": `import — Import tasks, rules, and tags from a JSON file
+	"import": `import - Import tasks, rules, and tags from a JSON file
 
 Usage:
   butler import <file.json> [--replace]
@@ -350,7 +360,7 @@ Why use import:
   from multiple butler instances. Use --replace for a clean restore, or
   omit it to add missing items without touching existing ones.`,
 
-	"serve": `serve — Start MCP server over stdio
+	"serve": `serve - Start MCP server over stdio
 
 Usage:
   butler serve
@@ -360,7 +370,7 @@ Why use serve:
   tools over stdin/stdout. Used for integration with AI assistants and other MCP
   clients. All CLI commands have equivalent MCP tools.`,
 
-	"uninstall": `uninstall — Remove butler binary and data from this machine
+	"uninstall": `uninstall - Remove butler binary and data from this machine
 
 Usage:
   butler uninstall [--force]
@@ -384,7 +394,7 @@ Note:
   Windows: run as Administrator if needed.
   Remember to remove the MCP server config: claude mcp remove butler`,
 
-	"help": `--help — Show help for butler commands
+	"help": `--help - Show help for butler commands
 
 Usage:
   butler --help              List all commands

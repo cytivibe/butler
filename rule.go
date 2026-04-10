@@ -61,6 +61,15 @@ type GetRuleOpts struct {
 }
 
 func GetRules(store *Store, opts GetRuleOpts) ([]string, error) {
+	if opts.Tag != "" {
+		if n, err := normalizeTagName(opts.Tag); err == nil {
+			opts.Tag = n
+		} else if strings.ToUpper(strings.TrimSpace(opts.Tag)) != "NONE" {
+			return nil, err
+		} else {
+			opts.Tag = "NONE"
+		}
+	}
 	var lines []string
 	err := store.ReadTx(func(tx *sql.Tx) error {
 		if opts.Seq > 0 {
@@ -233,7 +242,7 @@ func SetRule(store *Store, seq int, opts SetRuleOpts) error {
 		}
 		if opts.Name != nil {
 			if strings.TrimSpace(*opts.Name) == "" {
-				return fmt.Errorf("rule name cannot be empty — use deleterule to remove a rule")
+				return fmt.Errorf("rule name cannot be empty - use deleterule to remove a rule")
 			}
 			if _, err := tx.Exec("UPDATE rules SET name = ? WHERE id = ?", *opts.Name, ruleID); err != nil {
 				return err

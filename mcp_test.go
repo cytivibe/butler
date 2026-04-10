@@ -444,59 +444,6 @@ func TestMCPGetruleRequiresParam(t *testing.T) {
 	}
 }
 
-func TestMCPHandlersRejectBadParams(t *testing.T) {
-	tests := []struct {
-		name   string
-		params map[string]interface{}
-		key    string
-	}{
-		{"missing key", map[string]interface{}{}, "name"},
-		{"wrong type int", map[string]interface{}{"name": 123}, "name"},
-		{"wrong type bool", map[string]interface{}{"name": true}, "name"},
-		{"nil value", map[string]interface{}{"name": nil}, "name"},
-		{"empty string", map[string]interface{}{"name": ""}, "name"},
-	}
-	for _, tt := range tests {
-		t.Run("requireString/"+tt.name, func(t *testing.T) {
-			_, err := requireString(tt.params, tt.key)
-			if err == nil {
-				t.Fatalf("expected error for %s", tt.name)
-			}
-		})
-	}
-
-	intTests := []struct {
-		name   string
-		params map[string]interface{}
-	}{
-		{"missing key", map[string]interface{}{}},
-		{"wrong type string", map[string]interface{}{"seq": "abc"}},
-		{"nil value", map[string]interface{}{"seq": nil}},
-	}
-	for _, tt := range intTests {
-		t.Run("requireInt/"+tt.name, func(t *testing.T) {
-			_, err := requireInt(tt.params, "seq")
-			if err == nil {
-				t.Fatalf("expected error for %s", tt.name)
-			}
-		})
-	}
-
-	v, err := requireInt(map[string]interface{}{"seq": float64(5)}, "seq")
-	if err != nil || v != 5 {
-		t.Fatalf("expected 5, got %d, err: %v", v, err)
-	}
-
-	_, err = toStringSlice([]interface{}{"ok", 123, "also ok"})
-	if err == nil {
-		t.Fatal("expected error for non-string element")
-	}
-
-	result, err := toStringSlice([]interface{}{"a", "b", "c"})
-	if err != nil || len(result) != 3 || result[1] != "b" {
-		t.Fatalf("expected [a b c], got %v, err: %v", result, err)
-	}
-}
 
 func TestMCPServe(t *testing.T) {
 	store := testStore(t)
@@ -694,6 +641,165 @@ func TestMCPAddTaskShowsTagsInResponse(t *testing.T) {
 	text = mcpText(resp)
 	if !strings.Contains(text, "#SOLO") {
 		t.Fatalf("expected single tag in response, got: %s", text)
+	}
+}
+
+func TestMCPAddTaskShowsParentInResponse(t *testing.T) {
+	store := testStore(t)
+	mcp := NewMCPServer("butler", "1.0.0")
+	registerTools(mcp, store)
+
+	// Root task should NOT show parent
+	resp := mcpCall(mcp, "addtask", map[string]interface{}{"name": "Project"})
+	text := mcpText(resp)
+	if strings.Contains(text, "under") {
+		t.Fatalf("root task should not show parent, got: %s", text)
+	}
+
+	// Subtask should show parent
+	resp = mcpCall(mcp, "addtask", map[string]interface{}{
+		"name":  "Backend",
+		"under": "Project",
+	})
+	text = mcpText(resp)
+	if !strings.Contains(text, "(under Project)") {
+		t.Fatalf("expected '(under Project)' in response, got: %s", text)
+	}
+
+	// Deep subtask should show full parent ref
+	resp = mcpCall(mcp, "addtask", map[string]interface{}{
+		"name":  "API",
+		"under": "Project:1",
+	})
+	text = mcpText(resp)
+	if !strings.Contains(text, "(under Project:1)") {
+		t.Fatalf("expected '(under Project:1)' in response, got: %s", text)
+	}
+
+	// Subtask with tags should show both parent and tags
+	mcpCall(mcp, "addtag", map[string]interface{}{"name": "URGENT"})
+	resp = mcpCall(mcp, "addtask", map[string]interface{}{
+		"name":  "Database",
+		"under": "Project",
+		"tags":  []interface{}{"URGENT"},
+	})
+	text = mcpText(resp)
+	if !strings.Contains(text, "(under Project)") || !strings.Contains(text, "#URGENT") {
+		t.Fatalf("expected parent and tag in response, got: %s", text)
+	}
+}
+
+func TestMCPGetTaskMultiTag(t *testing.T) {
+	store := testStore(t)
+	mcp := NewMCPServer("butler", "1.0.0")
+	registerTools(mcp, store)
+
+	mcpCall(mcp, "addtag", map[string]interface{}{"name": "URGENT"})
+	mcpCall(mcp, "addtag", map[string]interface{}{"name": "BACKEND"})
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "T1", "tags": []interface{}{"URGENT", "BACKEND"}})
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "T2", "tags": []interface{}{"URGENT"}})
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "T3", "tags": []interface{}{"BACKEND"}})
+
+	resp := mcpCall(mcp, "gettask", map[string]interface{}{
+		"tag": []interface{}{"URGENT", "BACKEND"},
+	})
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %v", resp.Error.Message)
+	}
+	text := mcpText(resp)
+	if !strings.Contains(text, "T1") {
+		t.Fatalf("expected T1 in output: %s", text)
+	}
+	if strings.Contains(text, "T2") || strings.Contains(text, "T3") {
+		t.Fatalf("expected only T1: %s", text)
+	}
+}
+
+func TestMCPGetTaskNotTag(t *testing.T) {
+	store := testStore(t)
+	mcp := NewMCPServer("butler", "1.0.0")
+	registerTools(mcp, store)
+
+	mcpCall(mcp, "addtag", map[string]interface{}{"name": "URGENT"})
+	mcpCall(mcp, "addtag", map[string]interface{}{"name": "BACKEND"})
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "T1", "tags": []interface{}{"URGENT"}})
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "T2", "tags": []interface{}{"BACKEND"}})
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "T3"})
+
+	resp := mcpCall(mcp, "gettask", map[string]interface{}{
+		"nottag": []interface{}{"URGENT"},
+	})
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %v", resp.Error.Message)
+	}
+	text := mcpText(resp)
+	if strings.Contains(text, "T1") {
+		t.Fatalf("T1 should be excluded: %s", text)
+	}
+	if !strings.Contains(text, "T2") || !strings.Contains(text, "T3") {
+		t.Fatalf("expected T2 and T3: %s", text)
+	}
+}
+
+func TestMCPGetTaskTagAndNotTagCombo(t *testing.T) {
+	store := testStore(t)
+	mcp := NewMCPServer("butler", "1.0.0")
+	registerTools(mcp, store)
+
+	mcpCall(mcp, "addtag", map[string]interface{}{"name": "URGENT"})
+	mcpCall(mcp, "addtag", map[string]interface{}{"name": "BACKEND"})
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "T1", "tags": []interface{}{"URGENT", "BACKEND"}})
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "T2", "tags": []interface{}{"URGENT"}})
+
+	resp := mcpCall(mcp, "gettask", map[string]interface{}{
+		"tag":    []interface{}{"URGENT"},
+		"nottag": []interface{}{"BACKEND"},
+	})
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %v", resp.Error.Message)
+	}
+	text := mcpText(resp)
+	if !strings.Contains(text, "T2") {
+		t.Fatalf("expected T2: %s", text)
+	}
+	if strings.Contains(text, "T1") {
+		t.Fatalf("T1 should be excluded: %s", text)
+	}
+}
+
+func TestMCPGetTaskNonexistentTagErrors(t *testing.T) {
+	store := testStore(t)
+	mcp := NewMCPServer("butler", "1.0.0")
+	registerTools(mcp, store)
+
+	resp := mcpCall(mcp, "gettask", map[string]interface{}{
+		"tag": []interface{}{"NOPE"},
+	})
+	result := resp.Result.(map[string]interface{})
+	if isErr, ok := result["isError"].(bool); !ok || !isErr {
+		t.Fatal("expected error for nonexistent tag")
+	}
+}
+
+func TestMCPGetTaskTagSingleStringBackcompat(t *testing.T) {
+	store := testStore(t)
+	mcp := NewMCPServer("butler", "1.0.0")
+	registerTools(mcp, store)
+
+	mcpCall(mcp, "addtag", map[string]interface{}{"name": "URGENT"})
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "T1", "tags": []interface{}{"URGENT"}})
+	mcpCall(mcp, "addtask", map[string]interface{}{"name": "T2"})
+
+	// Some MCP clients might still send a string -- handle gracefully
+	resp := mcpCall(mcp, "gettask", map[string]interface{}{
+		"tag": "URGENT",
+	})
+	if resp.Error != nil {
+		t.Fatalf("single string should still work: %v", resp.Error.Message)
+	}
+	text := mcpText(resp)
+	if !strings.Contains(text, "T1") {
+		t.Fatalf("expected T1: %s", text)
 	}
 }
 

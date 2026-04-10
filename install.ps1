@@ -1,4 +1,4 @@
-# Butler installer for Windows — detects architecture, downloads binary, adds to PATH.
+# Butler installer for Windows - detects architecture, downloads binary, adds to PATH.
 # Usage: irm https://raw.githubusercontent.com/cytivibe/butler/main/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
@@ -47,7 +47,7 @@ while ($attempts -lt $maxAttempts) {
     } catch [System.IO.IOException] {
         $attempts++
         if ($attempts -eq $maxAttempts) {
-            Write-Error "Cannot write to $dest — file is locked. Close any applications using butler and try again."
+            Write-Error "Cannot write to $dest - file is locked. Close any applications using butler and try again."
             exit 1
         }
         Write-Host "File locked, retrying in 3 seconds..."
